@@ -1,0 +1,22 @@
+# Editors / tooling
+.claude/
+.idea/
+.DS_Store
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+.env*.local
+
+# Spec doc (kept local)
+job-triage-agent-requirements.md

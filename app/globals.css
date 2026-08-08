@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4 is configured HERE, in CSS, not in a tailwind.config.js — v4
+ * dropped the JS config file for most cases. Design tokens go in an @theme
+ * block and become utilities automatically.
+ *
+ * Deliberately left almost empty. The UI is still stubs, so there's nothing to
+ * theme yet. When you style it for real, this is where the tokens go:
+ *
+ *   @theme {
+ *     --font-display: "...", sans-serif;
+ *     --color-accent: oklch(0.7 0.15 250);
+ *   }
+ *
+ * ...which would then give you `font-display` and `text-accent`/`bg-accent`.
+ *
+ * Tailwind's preflight (its CSS reset) comes in with the @import above, so no
+ * hand-written reset is needed.
+ */
