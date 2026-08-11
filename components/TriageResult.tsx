@@ -1,4 +1,5 @@
 import type { TriageResponse } from "@/lib/types";
+import { CopyButton } from "@/components/CopyButton";
 
 /**
  * The output half of the UI: fit score, reasoning, and the letter draft.
@@ -11,8 +12,13 @@ import type { TriageResponse } from "@/lib/types";
  * state), which is fine: a component without the directive adapts to wherever
  * it's used.
  *
- * Leave the directive off until something here actually needs interactivity —
- * a copy-to-clipboard button on the letter, say. Then add it.
+ * The copy button IS interactive, and the instinct would be to add "use client"
+ * here to accommodate it. Don't — that would ship this whole component to the
+ * browser for the sake of one button. It lives in its own Client Component
+ * (CopyButton) instead, so only the button crosses the boundary.
+ *
+ * That's the pattern worth internalising: when one child needs interactivity,
+ * extract the child rather than promoting the parent.
  *
  * This is the piece Phase 2's /jobs page will reuse, which is why it's in
  * components/ rather than colocated in app/.
@@ -43,10 +49,17 @@ export function TriageResult({ result }: TriageResultProps) {
 
       {/* TODO: fit score — the number */}
       {/* TODO: fit score — the reasoning */}
-      {/* TODO: letter draft, preserving line breaks — `whitespace-pre-wrap` */}
       {/* TODO: research attempts, so the loop is visible */}
 
-      <p className="text-sm text-gray-600 dark:text-gray-400">
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-sm font-medium">Cover letter opener</h3>
+        {/* TODO: pass result.letterDraft once it's populated */}
+        <CopyButton value="" label="Copy letter" />
+      </div>
+
+      {/* TODO: render result.letterDraft here — keep `whitespace-pre-wrap`
+          or the paragraph breaks collapse. */}
+      <p className="whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-400">
         Not implemented.
       </p>
     </section>

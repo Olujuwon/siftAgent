@@ -1,7 +1,10 @@
 "use client";
 
-import type { TriageResponse } from "@/lib/types";
-import {useState} from "react";
+import type {TriageErrorResponse, TriageRequest, TriageResponse} from "@/lib/types";
+import {ChangeEvent, useState} from "react";
+// Named imports so only these two icons get bundled, not the whole set.
+import { CircleX, Loader2 } from "lucide-react";
+import {ErrorComponent} from "./ErrorComponent";
 
 /**
  * The input half of the UI: one textarea plus a submit button.
@@ -41,27 +44,38 @@ type JobFormProps = {
 };
 
 export function JobForm({ onResult }: JobFormProps) {
-  const [jobInput, setJobInput] = useState("");
-  // TODO: const [isLoading, setIsLoading] = useState(false);
-  // TODO: const [error, setError] = useState<string | null>(null);
+  const [jobInput, setJobInput] = useState<string>("");
+  const [isTextAreaLocked, setIsTextAreaLocked] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // TODO: async function handleSubmit(event: React.FormEvent) {
-  //         event.preventDefault();
-  //         setError(null); setIsLoading(true);
-  //         try {
-  //           const response = await fetch("/api/triage", {
-  //             method: "POST",
-  //             headers: { "Content-Type": "application/json" },
-  //             body: JSON.stringify({ jobInput } satisfies TriageRequest),
-  //           });
-  //           if (!response.ok) { ...read TriageErrorResponse, setError, return }
-  //           onResult(await response.json());
-  //         } catch { setError("..."); }
-  //         finally { setIsLoading(false); }
-  //       }
+  async function handleSubmit(event: React.FormEvent) {
+           event.preventDefault();
+           setError(null); setIsLoading(true); setIsTextAreaLocked(true);
+      try {
+             const response = await fetch("/api/triage", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({ jobInput } satisfies TriageRequest),
+            });
+            if (!response.ok) {
+                const body = (await response.json().catch(() => null)) as TriageErrorResponse | null;
+                throw new Error(body?.error ?? `Request failed (${response.status})`);
+             }
+            setIsTextAreaLocked(false);
+             onResult(await response.json());
+           } catch(error: unknown) {
+            setError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+           }
+           finally { setIsLoading(false); setIsTextAreaLocked(false);}
+         }
+
+    const handleCloseErrorToast = ()=> {
+        setError(null);
+    }
 
   return (
-    <form className="flex flex-col gap-3">
+    <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
       <label htmlFor="job-input" className="text-sm font-medium">
         Job posting URL, or the posting text
       </label>
@@ -70,17 +84,21 @@ export function JobForm({ onResult }: JobFormProps) {
         rows={12}
         className="w-full rounded-md border border-gray-300 p-3 font-mono text-sm dark:border-gray-700 dark:bg-transparent"
         placeholder="https://... or paste the full posting"
-        //value={jobInput} onChange={...} disabled={isLoading}
+        value={jobInput} onChange={(event: ChangeEvent<HTMLTextAreaElement>)=>setJobInput(event.currentTarget.value)} disabled={isTextAreaLocked}
       />
-      {/* TODO: disabled={isLoading || jobInput.trim() === ""}, label swaps to "Triaging..." */}
+        {error && (
+          <ErrorComponent message={error} onDismiss={handleCloseErrorToast}/>
+        )}
       <button
         type="submit"
-        className="self-start rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
+        className="inline-flex items-center justify-center gap-2 self-start rounded-md bg-gray-900 px-16 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
+        disabled={isLoading || jobInput.trim() === ""}
       >
-        Triage
+          {isLoading && isTextAreaLocked && (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          )}
+          {isLoading && isTextAreaLocked ? "Triaging" : "Triage"}
       </button>
-
-      {/* TODO: {error && <p role="alert" className="text-sm text-red-600">{error}</p>} */}
     </form>
   );
 }
