@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1120" viewBox="0 0 1200 1120" font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrowLoop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c2410c"/>
+    </marker>
+    <marker id="arrowData" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1d4ed8"/>
+    </marker>
+    <style>
+      .box  { fill:#ffffff; stroke:#334155; stroke-width:1.6; rx:6; }
+      .term { fill:#ffffff; stroke:#334155; stroke-width:1.6; }
+      .lbl  { fill:#0f172a; font-size:13px; text-anchor:middle; }
+      .lblb { fill:#0f172a; font-size:13px; font-weight:600; text-anchor:middle; }
+      .edge { stroke:#334155; stroke-width:1.6; fill:none; marker-end:url(#arrow); }
+      .loop { stroke:#c2410c; stroke-width:2; fill:none; marker-end:url(#arrowLoop); }
+      .data { stroke:#1d4ed8; stroke-width:1.6; fill:none; stroke-dasharray:6 4; marker-end:url(#arrowData); }
+      .nL   { fill:#475569; font-size:11px; text-anchor:end; }
+      .nR   { fill:#475569; font-size:11px; }
+      .note { fill:#475569; font-size:11px; }
+      .loopT{ fill:#c2410c; font-size:11px; font-weight:600; }
+      .dataT{ fill:#1d4ed8; font-size:11px; }
+      .panel{ fill:#fafafa; stroke:#cbd5e1; stroke-width:1; stroke-dasharray:4 4; rx:10; }
+      .ptitle{ fill:#0f172a; font-size:14px; font-weight:700; letter-spacing:.04em; }
+      .psub { fill:#64748b; font-size:11px; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="1120" fill="#ffffff"/>
+  <text x="40" y="34" fill="#0f172a" font-size="17" font-weight="700">SiftAgent — Phase 1 workflow</text>
+
+  <!-- ══════════ PANEL 1: RESUME PIPELINE ══════════ -->
+  <rect class="panel" x="40" y="56" width="400" height="604"/>
+  <text class="ptitle" x="62" y="84">RESUME PIPELINE</text>
+  <text class="psub" x="62" y="102">Runs once, when your CV changes. Plain functions — not a LangGraph.</text>
+
+  <circle class="term" cx="240" cy="150" r="26"/>
+  <text class="lbl" x="240" y="155">Start</text>
+
+  <path class="edge" d="M 240 176 L 240 200 L 150 200 L 150 226"/>
+  <path class="edge" d="M 240 176 L 240 200 L 330 200 L 330 226"/>
+
+  <rect class="box" x="80" y="226" width="140" height="46"/>
+  <text class="lbl" x="150" y="254">CV Text</text>
+
+  <rect class="box" x="260" y="226" width="140" height="46"/>
+  <text class="lbl" x="330" y="254">CV in PDF</text>
+  <text class="nL" x="318" y="296">parse first — reject</text>
+  <text class="nL" x="318" y="309">if no text layer</text>
+
+  <path class="edge" d="M 150 272 L 150 324 L 240 324 L 240 356"/>
+  <path class="edge" d="M 330 272 L 330 324 L 240 324"/>
+
+  <rect class="box" x="150" y="356" width="180" height="46"/>
+  <text class="lbl" x="240" y="384">Summarise CV</text>
+  <text class="nL" x="228" y="422">1 model call ·</text>
+  <text class="nL" x="228" y="435">caveats verbatim</text>
+
+  <path class="edge" d="M 240 402 L 240 452"/>
+
+  <rect class="box" x="128" y="452" width="224" height="52" fill="#eff6ff" stroke="#1d4ed8"/>
+  <text class="lblb" x="240" y="475">STORE</text>
+  <text class="lbl" x="240" y="493" font-size="11" fill="#475569">.resume-summary.local.json</text>
+
+  <path class="edge" d="M 240 504 L 240 556"/>
+  <circle class="term" cx="240" cy="582" r="26"/>
+  <text class="lbl" x="240" y="587">End</text>
+
+  <!-- ══════════ PANEL 2: TRIAGE GRAPH ══════════ -->
+  <rect class="panel" x="480" y="56" width="680" height="884"/>
+  <text class="ptitle" x="502" y="84">TRIAGE GRAPH</text>
+  <text class="psub" x="502" y="102">Runs per posting. LangGraph StateGraph.</text>
+
+  <circle class="term" cx="820" cy="150" r="26"/>
+  <text class="lbl" x="820" y="155">START</text>
+
+  <path class="edge" d="M 820 176 L 820 200 L 635 200 L 635 230"/>
+  <path class="edge" d="M 820 176 L 820 200 L 1005 200 L 1005 230"/>
+
+  <rect class="box" x="560" y="230" width="150" height="46"/>
+  <text class="lbl" x="635" y="258">Job URL</text>
+
+  <rect class="box" x="930" y="230" width="150" height="46"/>
+  <text class="lbl" x="1005" y="258">Job Text</text>
+
+  <path class="edge" d="M 635 276 L 635 318"/>
+  <rect class="box" x="545" y="318" width="180" height="46"/>
+  <text class="lbl" x="635" y="340">Retrieve job</text>
+  <text class="lbl" x="635" y="356">details</text>
+  <text class="nR" x="737" y="345">Tavily Extract</text>
+
+  <path class="edge" d="M 635 364 L 635 400 L 820 400 L 820 430"/>
+  <path class="edge" d="M 1005 276 L 1005 400 L 820 400"/>
+
+  <rect class="box" x="730" y="430" width="180" height="46"/>
+  <text class="lbl" x="820" y="458">intake</text>
+
+  <path class="edge" d="M 820 476 L 820 518"/>
+
+  <rect class="box" x="730" y="518" width="180" height="46"/>
+  <text class="lbl" x="820" y="546">research</text>
+  <text class="nL" x="718" y="536">Tavily Search — company</text>
+  <text class="nL" x="718" y="549">stack, funding, news</text>
+
+  <path class="edge" d="M 820 564 L 820 606"/>
+
+  <rect class="box" x="730" y="606" width="180" height="46"/>
+  <text class="lbl" x="820" y="634">score_fit</text>
+
+  <path class="edge" d="M 820 652 L 820 662"/>
+
+  <path d="M 820 662 L 906 706 L 820 750 L 734 706 z" fill="#fff7ed" stroke="#c2410c" stroke-width="1.8"/>
+  <text class="lbl" x="820" y="703" font-size="12">routeAfter</text>
+  <text class="lbl" x="820" y="717" font-size="12">Score</text>
+
+  <!-- loop-back edge: the thing that makes this a graph -->
+  <path class="loop" d="M 906 706 L 1010 706 L 1010 541 L 910 541"/>
+  <text class="loopT" x="1020" y="686">thin / uncertain</text>
+  <text class="loopT" x="1020" y="701">AND attempts</text>
+  <text class="loopT" x="1020" y="716">&lt; cap</text>
+  <text class="loopT" x="1020" y="628">LOOP</text>
+  <text class="nR" x="1020" y="560" fill="#c2410c">new query angle</text>
+
+  <path class="edge" d="M 820 750 L 820 790"/>
+  <text class="nR" x="832" y="774">confident, or cap reached</text>
+
+  <rect class="box" x="730" y="790" width="180" height="46"/>
+  <text class="lbl" x="820" y="812">Write cover</text>
+  <text class="lbl" x="820" y="828">letter</text>
+
+  <path class="edge" d="M 820 836 L 820 864"/>
+  <circle class="term" cx="820" cy="890" r="26"/>
+  <text class="lbl" x="820" y="895">END</text>
+
+  <!-- data dependency: stored summary feeds the graph's initial state -->
+  <path class="data" d="M 352 490 L 560 490 L 560 453 L 730 453"/>
+  <text class="dataT" x="362" y="466">resumeSummary — read by the route,</text>
+  <text class="dataT" x="362" y="479">passed in as the graph's initial state</text>
+
+  <!-- ══════════ FOOTNOTES ══════════ -->
+  <text class="ptitle" x="62" y="1000">NOTES</text>
+  <text class="note" x="62" y="1024">1.  The orange loop-back edge is what makes this a graph rather than a chain. Without it nothing appends to searchResults twice, and the</text>
+  <text class="note" x="62" y="1040">     ReducedValue reducer in state.ts is pointless.</text>
+  <text class="note" x="62" y="1060">2.  routeAfterScore checks the attempts cap FIRST — confidence never overrides it. An uncapped loop burns API credits quietly rather than throwing.</text>
+  <text class="note" x="62" y="1080">3.  The resume is summarised ONCE and stored, not per run. A summarise node would fire a model call on every triage for identical output.</text>
+  <text class="note" x="62" y="1100">4.  intake needs no model call. score_fit and draft_letter are one call each; research is a tool call per pass.</text>
+</svg>

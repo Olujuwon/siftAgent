@@ -1,29 +1,37 @@
+/**
+ * PURPOSE
+ * NODE `draft_letter` — final node. Generates a cover letter OPENER, then END.
+ *
+ * STATUS
+ * STUB.
+ *
+ * EXPORTS
+ * - draftLetter(state) -> Partial<state>   sets letterDraft
+ *
+ * STEPS
+ * 1. Prompt with jobText + resumeSummary + searchResults + fitScore.reasoning.
+ * 2. One model call, plain string output. No structured output needed.
+ * 3. Return { letterDraft }.
+ *
+ * STYLE RULES — these go in the prompt, non-negotiable
+ * - Short and direct. No "I am writing to express my interest".
+ * - No em dashes.
+ * - Accurate. Never claim experience absent from resumeSummary. Vue is
+ *   side-project only, not production, and the letter must not imply otherwise.
+ * - Specific. Lean on something real from the research (their stack, a recent
+ *   launch), not generic enthusiasm.
+ *
+ * GOTCHAS
+ * - An opener, not a full letter. One or two paragraphs.
+ * - Inflating a side project into production experience is the default failure
+ *   mode of this node. If it happens, that's the signal to make resumeSummary a
+ *   structured object instead of a string, so caveats are data not prose.
+ */
+
 import type { SiftStateType } from "../state";
 
-/**
- * NODE: draft_letter — final node, generates a cover letter OPENER.
- *
- * STUB. What it should do:
- *
- * - Write a short opener (an opening paragraph or two, not a full letter),
- *   using `jobText`, `resumeSummary`, `searchResults` and `fitScore.reasoning`.
- *
- * Style constraints, non-negotiable, they go in the prompt:
- *   - Short and direct. No filler, no "I am writing to express my interest".
- *   - No em dashes.
- *   - Accurate. Never claim experience that isn't in resumeSummary. Vue is a
- *     side-project only, not production experience, and the letter must not
- *     imply otherwise.
- *   - Specific: lean on something real from the research (their stack, a recent
- *     launch) rather than generic enthusiasm.
- *
- * Then -> END.
- */
 export async function draftLetter(
   state: SiftStateType,
 ): Promise<Partial<SiftStateType>> {
-  // TODO: build the prompt with the style rules above
-  // TODO: call ChatAnthropic (plain string output is fine here)
-  // TODO: return { letterDraft }
   throw new Error("draftLetter node not implemented");
 }

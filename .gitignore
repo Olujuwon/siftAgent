@@ -18,5 +18,14 @@ next-env.d.ts
 .env.local
 .env*.local
 
+# Resume data — PII. Never commit.
+# The uploaded PDF is parsed in memory and never written to disk; only the
+# generated summary is cached, here:
+.resume-summary.local.json
+*.local.json
+# Belt and braces, in case a PDF ever gets saved locally for testing.
+*.pdf
+/resume/
+
 # Spec doc (kept local)
 job-triage-agent-requirements.md

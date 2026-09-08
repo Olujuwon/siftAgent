@@ -1,34 +1,48 @@
 /**
- * Graph wiring.
+ * PURPOSE
+ * Wire the nodes into a graph and compile it. This is the file the project
+ * exists to make you write.
  *
- * STUB — this is the file the project exists to make you write. Nothing here
- * but the map.
+ * STATUS
+ * STUB. Nothing here but the map.
  *
+ * EXPORTS
+ * - buildGraph()  -> compiled graph, invoked by app/api/triage/route.ts
+ *
+ * SHAPE
  *   [intake] -> [research] -> [score_fit] -> ? -> [draft_letter] -> END
- *                   ^                        |
- *                   +---- loop if thin ------+
+ *                   ^                       |
+ *                   +---- loop if thin -----+
  *
- * Steps:
+ * STEPS
+ * 1. new StateGraph(SiftState)          using the StateSchema from ./state
+ * 2. .addNode() x4                      intake, research, score_fit, draft_letter
+ * 3. .addEdge(START, "intake")          then straight edges through score_fit
+ * 4. .addConditionalEdges(...)          the loop-back edge (see SKETCH)
+ * 5. .addEdge("draft_letter", END)
+ * 6. .compile()                         add MemorySaver later if you want resume
  *
- * 1. `new StateGraph(SiftState)` using the annotation from ./state.
- * 2. `.addNode()` for each of: intake, research, score_fit, draft_letter.
- * 3. `.addEdge(START, "intake")`, then the straight edges through to score_fit.
- * 4. `.addConditionalEdges("score_fit", routeAfterScore, {
- *      research: "research",
- *      draft_letter: "draft_letter",
- *    })` — the loop-back edge is what makes this a graph rather than a chain.
- * 5. `.addEdge("draft_letter", END)`.
- * 6. `.compile()`. Add a checkpointer here later if you want resumable runs
- *    (MemorySaver is enough for local dev; the doc rules out a real DB for now).
+ * BUILD ORDER — do not do all of it at once
+ * a. START -> intake -> END. One node. Confirm it compiles and runs.
+ * b. Hook up the route so the form gets a real response.
+ * c. Add research, then score_fit, still a STRAIGHT LINE.
+ * d. Only then swap the straight edge for addConditionalEdges.
  *
- * Export the compiled graph so app/api/triage/route.ts can invoke it.
+ * GOTCHAS
+ * - Loop last. A conditional edge on an unverified pipeline gives you two
+ *   candidate causes per failure, and one of them cycles and burns credits.
+ * - Graph API, not the Functional API (`entrypoint`/`task`, also exported).
+ *   Functional would make the loop a `while` and the edge an `if` — less code,
+ *   but it hides the concepts this project teaches, and can't be visualised.
+ * - Don't annotate the return type. Let .compile() infer it.
+ *
+ * SKETCH
+ *   .addConditionalEdges("score_fit", routeAfterScore, {
+ *     research: "research",
+ *     draft_letter: "draft_letter",
+ *   })
  */
 
-/**
- * Same build-time guard as `tools/search.ts`. The graph reaches the model and
- * the search tool, so it must never end up in a client bundle. The only way in
- * from the browser is `fetch("/api/triage")`.
- */
 import "server-only";
 
 // TODO: import { StateGraph, START, END } from "@langchain/langgraph";
@@ -38,14 +52,6 @@ import "server-only";
 // TODO: import { scoreFit, routeAfterScore } from "./nodes/scoreFit";
 // TODO: import { draftLetter } from "./nodes/draftLetter";
 
-/**
- * STUB: build and compile the graph.
- *
- * Return type is left loose on purpose — once you have a real
- * `Annotation.Root`, the compiled graph's type comes out of `.compile()` and
- * you should let TypeScript infer it instead of annotating by hand.
- */
 export function buildGraph() {
-  // TODO: wire the graph per the steps above and return the compiled result
   throw new Error("graph not wired yet");
 }

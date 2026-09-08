@@ -1,54 +1,47 @@
 /**
- * Tavily wrapper — used by two nodes, for two different Tavily endpoints.
+ * PURPOSE
+ * Tavily wrapper. Two endpoints, two callers — kept together so TAVILY_API_KEY
+ * is read in exactly one place and no node imports the SDK directly.
  *
+ * STATUS
  * STUB.
  *
- *   search()  -> research node. Company info: funding, tech stack, news.
- *   extract() -> intake node. Pulls the posting body out of a job URL.
+ * EXPORTS
+ * - search(query) -> SearchResult[]   used by the research node
+ * - extract(url)  -> string           used by the intake node
  *
- * Both live here so `TAVILY_API_KEY` is read in exactly one place and neither
- * node imports the SDK directly.
+ * STEPS
+ * 1. Read process.env.TAVILY_API_KEY, throw a clear error if missing.
+ * 2. Instantiate the client once at module level, not per call.
+ * 3. search():  worth looking at searchDepth, maxResults, includeAnswer —
+ *    a synthesised answer may save score_fit some tokens.
+ * 4. extract(): return page content as plain text.
  *
- * TODO: import { tavily } from "@tavily/core";
+ * GOTCHAS
+ * - Missing key should fail loudly at startup, not as a confusing 401 three
+ *   nodes deep.
+ * - extract() can legitimately return nothing — postings behind a login have no
+ *   text to get. Handle that case explicitly rather than returning "".
+ * - Server-only (enforced by the import below). Importing this from a client
+ *   component would put the key in the browser bundle.
+ * - Build this BEFORE finalising searchResultSchema in state.ts. Call it once
+ *   and look at the real shape rather than guessing.
  *
- * Notes when you implement:
- * - Read the key from process.env.TAVILY_API_KEY and throw a clear error if
- *   it's missing. A missing key should fail at startup, not as a confusing
- *   401 three nodes deep.
- * - Server-only module. Never import this from a client component; the key
- *   would end up in the browser bundle.
- * - Consider a small client cache / single instantiation instead of creating
- *   a client per call.
+ * SKETCH
+ *   import { tavily } from "@tavily/core";
+ *   const client = tavily({ apiKey: requireEnv("TAVILY_API_KEY") });
  */
 
-/**
- * Build-time guard. If any client component ever imports this module — directly
- * or through a chain of imports — the build FAILS instead of quietly shipping
- * TAVILY_API_KEY to the browser. Cheaper than remembering not to.
- */
 import "server-only";
 
 import type { SearchResult } from "../state";
 
-/**
- * STUB: company research search.
- *
- * TODO: call Tavily search. Worth looking at: `searchDepth`, `maxResults`,
- * and `includeAnswer` (a synthesised answer may save score_fit some tokens).
- */
+// TODO: import { tavily } from "@tavily/core";
+
 export async function search(query: string): Promise<SearchResult[]> {
-  // TODO
   throw new Error("Tavily search not implemented");
 }
 
-/**
- * STUB: extract posting text from a URL.
- *
- * TODO: call Tavily extract and return the page content as plain text.
- * Handle the "extraction returned nothing useful" case explicitly — some
- * postings are behind a login and there is no text to get.
- */
 export async function extract(url: string): Promise<string> {
-  // TODO
   throw new Error("Tavily extract not implemented");
 }

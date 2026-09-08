@@ -1,53 +1,52 @@
 /**
- * Shared types — the contract between the browser and the server.
+ * PURPOSE
+ * The contract between the browser and the server. Request/response shapes only.
  *
- * This module is the LEAF of the dependency graph. It must never import
- * anything: no langgraph, no Tavily, no React. That is the whole point of it
- * existing separately from `lib/agent/state.ts`.
+ * STATUS
+ * FitScore is still a placeholder; everything else is real.
  *
- * Why it matters: `components/` runs in the browser and `app/api/triage/route.ts`
- * runs on the server, and both need to agree on the shape of the request and
- * response. If they imported that shape from `state.ts`, the client would pull
- * langgraph into its import graph. Type-only imports do get erased at build
- * time, so it would probably work — but one accidental value import (a zod
- * schema, a constant) turns "probably fine" into a bundled agent framework.
- * Keeping the wire contract in a dependency-free module removes the question.
+ * HARD RULE: THIS MODULE IMPORTS NOTHING
+ * No langgraph, no zod, no React. That's why it's separate from
+ * lib/agent/state.ts.
  *
- * Rule of thumb: if the browser needs to know about it, it belongs here. If it
- * only ever exists server-side mid-run (like `SearchResult`), it belongs in
- * `lib/agent/state.ts`.
+ * Why: components/ runs in the browser and the route handlers run on the server,
+ * and both need these shapes. If they came from state.ts the client would pull
+ * langgraph into its import graph. Type-only imports are erased at build time so
+ * it would probably work — but one accidental value import (a zod schema, a
+ * constant) turns "probably fine" into a bundled agent framework. A
+ * dependency-free module removes the question.
+ *
+ * WHERE THINGS GO
+ * - browser needs to know about it            -> here
+ * - server-side scratch data (SearchResult)   -> lib/agent/state.ts
+ * - runtime values (zod schemas)              -> lib/agent/state.ts
+ * - component props                           -> next to the component
  */
-
-//import {string} from "zod";
-
-/**
- * How the posting arrived. The SERVER decides which this is — the browser sends
- * one raw string and the route handler sniffs it. Don't make the user pick.
- */
-export type JobInput = {
-  type: "url" | "text";
-  value: string;
-};
 
 /**
  * The fit verdict, as sent to the browser.
  *
- * STUB. Schema is deliberately TBD (see the requirements doc). Decide:
- *   - the scale (0-10? 0-100?)
- *   - whether `reasoning` is one blob or a breakdown of matched vs missing
- *   - whether the model's own confidence is exposed to the UI
- *
- * When you write the zod schema in `lib/agent/state.ts`, keep it in step with
- * this type — or better, define the schema there and make this
- * `z.infer<typeof fitScoreSchema>`. Just be aware that importing the schema
- * itself into a client component would bundle zod.
+ * MIRRORS `fitScoreSchema` in lib/agent/state.ts — keep the two in step. It is
+ * hand-written rather than `z.infer<typeof fitScoreSchema>` because inferring it
+ * would mean importing state.ts, and this module imports nothing. State.ts
+ * asserts the two match (`_fitScoreInSync`), so drift is a compile error there.
  */
 export type FitScore = {
-  // TODO: replace this index signature with the real fields.
-  [key: string]: unknown;
+  score: number;
+  confidence: "low" | "medium" | "high";
+  researchGaps: string[];
+  matched: string[];
+  missing: string[];
+  reasoning: string;
 };
 
-/** Request body for `POST /api/triage`. One raw string, server sniffs the type. */
+/**
+ * Request body for `POST /api/triage`.
+ *
+ * No `resumeSummary` field — the resume is uploaded separately via
+ * `POST /api/resume` and cached server-side, so the triage route reads it from
+ * the store rather than accepting it per request.
+ */
 export type TriageRequest = {
   /** A job posting URL, or the full posting text. */
   jobInput: string;
@@ -57,16 +56,39 @@ export type TriageRequest = {
 export type TriageResponse = {
   fitScore: FitScore;
   letterDraft: string;
-  /**
-   * How many research loops ran. Not strictly needed by the UI, but it's the
-   * only way to see from outside whether the conditional edge actually fired —
-   * which is part of the Phase 1 definition of done.
-   */
+  /** How many research loops ran — the only outside view of whether the loop fired. */
   attempts: number;
 };
 
-/** Error response. Keep the message generic; never forward provider errors verbatim. */
+/** Keep the message generic; never forward provider errors verbatim. */
 export type TriageErrorResponse = {
   error: string;
 };
 
+/**
+ * Success response from `POST /api/resume`.
+ *
+ * The summary is returned so the UI can display it — the only point at which a
+ * hallucinated summary is catchable before it skews every later triage.
+ */
+export type ResumeUploadResponse = {
+  summary: string;
+  updatedAt: string;
+  sourceFilename: string;
+};
+
+/**
+ * Response from `GET /api/resume`.
+ *
+ * A discriminated union, so the UI can't read `summary` without checking one
+ * exists. "No resume yet" is a normal first-run state — a 200 with
+ * `hasResume: false`, not a 404.
+ */
+export type ResumeStatusResponse =
+  | { hasResume: false }
+  | ({ hasResume: true } & ResumeUploadResponse);
+
+/** Same rule as TriageErrorResponse: generic messages only. */
+export type ResumeErrorResponse = {
+  error: string;
+};
