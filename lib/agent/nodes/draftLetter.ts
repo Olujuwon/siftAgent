@@ -33,5 +33,12 @@ import type { SiftStateType } from "../state";
 export async function draftLetter(
   state: SiftStateType,
 ): Promise<Partial<SiftStateType>> {
-  throw new Error("draftLetter node not implemented");
+  // TODO: replace with a real model call. Prompt from jobText + resumeSummary +
+  // searchResults + fitScore.reasoning, applying the style rules above. Plain
+  // string output — no structured output needed here.
+  //
+  // Placeholder for now so the graph terminates and the loop can be observed.
+  return {
+    letterDraft: `TODO: cover letter opener. Fit score ${state.fitScore?.score ?? "n/a"} after ${state.attempts} research pass(es).`,
+  };
 }

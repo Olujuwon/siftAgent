@@ -48,16 +48,25 @@ import { StateGraph, START, END } from "@langchain/langgraph";
 import { SiftState } from "./state";
 import {research} from "@/lib/agent/nodes/research";
 import {intake} from "@/lib/agent/nodes/intake";
-
-// TODO: import { scoreFit, routeAfterScore } from "./nodes/scoreFit";
-// TODO: import { draftLetter } from "./nodes/draftLetter";
+import {routeAfterScore, scoreFit} from "@/lib/agent/nodes/scoreFit";
+import {draftLetter} from "@/lib/agent/nodes/draftLetter";
 
 export function buildGraph() {
   return new StateGraph(SiftState)
       .addNode("intake", intake)
       .addNode("research", research)
+      .addNode("score_fit", scoreFit)
+      .addNode("draft_letter", draftLetter)
       .addEdge(START, "intake")
       .addEdge("intake", "research")
-      .addEdge("research", END)
+      .addEdge("research", "score_fit")
+      // Keys must be exactly what routeAfterScore returns; values are the node
+      // names from .addNode(). Both are plain strings — a mismatch fails at
+      // runtime, not compile time.
+      .addConditionalEdges("score_fit", routeAfterScore, {
+        research: "research",
+        draft_letter: "draft_letter",
+      })
+      .addEdge("draft_letter", END)
       .compile();
 }
