@@ -3,9 +3,6 @@
  * NODE `research` — company research via Tavily. Re-entered by the conditional
  * edge, so it runs more than once per graph invocation.
  *
- * STATUS
- * STUB.
- *
  * EXPORTS
  * - research(state) -> Partial<state>   appends searchResults, bumps attempts
  *
@@ -29,10 +26,20 @@
  *   2 -> "<company> glassdoor culture interview process"
  */
 
-import type { SiftStateType } from "../state";
+import type {SiftStateType} from "../state";
+import {search} from "@/lib/agent/tools/search";
+
+
+export const RESEARCH_ANGLES = ["<company> tech stack engineering", "<company> funding recent news",
+  "<company> glassdoor culture interview", "<company> what they build products customers"];
+
+const companyName = "Songtradr";   // TODO: extract properly
 
 export async function research(
   state: SiftStateType,
 ): Promise<Partial<SiftStateType>> {
-  throw new Error("research node not implemented");
+  const searchQuery = RESEARCH_ANGLES[state.attempts].replace("<company>", companyName);
+  const results = await search(searchQuery);
+  return { searchResults: results.map(r =>
+        ({...r, attempt: state.attempts})), attempts: state.attempts + 1 }
 }

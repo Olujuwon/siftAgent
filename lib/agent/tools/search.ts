@@ -40,8 +40,27 @@ import sampleJobPost from "../sampleJobPost.json";
 // TODO: import { tavily } from "@tavily/core";
 
 
-export async function search(query: string): Promise<SearchResult[]> {
-  throw new Error("Tavily search not implemented");
+/**
+ * FAKE. Three results derived from the query, so loop passes are
+ * distinguishable — if searchResults ever fills with identical entries, the
+ * reducer is overwriting instead of appending.
+ *
+ * `attempt` is omitted deliberately: the tool doesn't know which loop pass it's
+ * on. The research node stamps that when mapping these into state.
+ *
+ * TODO: replace the body with a real Tavily call. Map Tavily's `score` to
+ * `relevance`, and leave `rawContent` out — it would bloat state and prompts.
+ */
+export async function search(
+  query: string,
+): Promise<Omit<SearchResult, "attempt">[]> {
+  return [1, 2, 3].map((n) => ({
+    title: `Result ${n} for: ${query}`,
+    url: `https://example.com/${encodeURIComponent(query)}/${n}`,
+    content: `Fake content ${n}. Pretend this says something useful about "${query}".`,
+    relevance: 1 - n * 0.1,
+    queryAngle: query,
+  }));
 }
 
 export async function extract(url: string): Promise<string> {

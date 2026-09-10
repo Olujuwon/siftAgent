@@ -46,15 +46,18 @@
 import "server-only";
 import { StateGraph, START, END } from "@langchain/langgraph";
 import { SiftState } from "./state";
-import { intake } from "./nodes/intake";
+import {research} from "@/lib/agent/nodes/research";
+import {intake} from "@/lib/agent/nodes/intake";
 
-// TODO: import { research } from "./nodes/research";
 // TODO: import { scoreFit, routeAfterScore } from "./nodes/scoreFit";
 // TODO: import { draftLetter } from "./nodes/draftLetter";
 
 export function buildGraph() {
-  return new StateGraph(SiftState).addNode("intake", intake)
+  return new StateGraph(SiftState)
+      .addNode("intake", intake)
+      .addNode("research", research)
       .addEdge(START, "intake")
-      .addEdge("intake", END).compile();
-  //throw new Error("graph not wired yet");
+      .addEdge("intake", "research")
+      .addEdge("research", END)
+      .compile();
 }
