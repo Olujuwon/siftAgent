@@ -26,9 +26,16 @@
  */
 
 import type { SiftStateType } from "../state";
+import {extract} from "@/lib/agent/tools/search";
 
 export async function intake(
   state: SiftStateType,
 ): Promise<Partial<SiftStateType>> {
-  throw new Error("intake node not implemented");
+  if (state.jobInput.type === "text") {
+    return {jobText: state.jobInput.value}
+  }
+  else {
+    const extractResult = await extract(state.jobInput.value);
+    return {jobText: extractResult}
+  }
 }

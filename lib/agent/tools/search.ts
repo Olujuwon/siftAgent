@@ -35,13 +35,19 @@
 import "server-only";
 
 import type { SearchResult } from "../state";
+import sampleJobPost from "../sampleJobPost.json";
 
 // TODO: import { tavily } from "@tavily/core";
+
 
 export async function search(query: string): Promise<SearchResult[]> {
   throw new Error("Tavily search not implemented");
 }
 
 export async function extract(url: string): Promise<string> {
-  throw new Error("Tavily extract not implemented");
+  if (!url.startsWith("http")) {
+    throw new Error("Tavily extract not implemented");
+  }else{
+    return sampleJobPost.job1;
+  }
 }

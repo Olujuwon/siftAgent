@@ -2,7 +2,7 @@
   "name": "siftagent",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@9.15.4",
+  "packageManager": "pnpm@12.3.4",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -31,6 +31,7 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.0",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.13",
     "typescript": "^5.9.0"
   }
 }

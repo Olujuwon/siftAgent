@@ -44,14 +44,17 @@
  */
 
 import "server-only";
+import { StateGraph, START, END } from "@langchain/langgraph";
+import { SiftState } from "./state";
+import { intake } from "./nodes/intake";
 
-// TODO: import { StateGraph, START, END } from "@langchain/langgraph";
-// TODO: import { SiftState } from "./state";
-// TODO: import { intake } from "./nodes/intake";
 // TODO: import { research } from "./nodes/research";
 // TODO: import { scoreFit, routeAfterScore } from "./nodes/scoreFit";
 // TODO: import { draftLetter } from "./nodes/draftLetter";
 
 export function buildGraph() {
-  throw new Error("graph not wired yet");
+  return new StateGraph(SiftState).addNode("intake", intake)
+      .addEdge(START, "intake")
+      .addEdge("intake", END).compile();
+  //throw new Error("graph not wired yet");
 }
