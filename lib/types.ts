@@ -66,6 +66,16 @@ export type TriageErrorResponse = {
 };
 
 /**
+ * Request body for `POST /api/resume`.
+ *
+ * Text only for now. The PDF path will arrive as multipart FormData instead of
+ * JSON, so it won't use this type — see the route.
+ */
+export type ResumeUploadRequest = {
+  resumeText: string;
+};
+
+/**
  * Success response from `POST /api/resume`.
  *
  * The summary is returned so the UI can display it — the only point at which a

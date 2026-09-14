@@ -12,9 +12,6 @@
  *   err  { error }
  *
  * TODO
- * - swap PLACEHOLDER_RESUME_SUMMARY for readResumeSummary(); 400 if it's null,
- *   and do NOT invoke the graph — scoring against an empty resume produces a
- *   confident, meaningless answer and still costs a model call
  * - narrow the response to { fitScore, letterDraft, attempts } once score_fit
  *   and draft_letter are wired; keep raw searchResults out of it
  *
@@ -31,12 +28,10 @@ import { NextResponse } from "next/server";
 
 import { buildGraph } from "@/lib/agent/graph";
 import type { JobInput } from "@/lib/agent/state";
+import { readResumeSummary } from "@/lib/resume/store";
 import type { TriageErrorResponse, TriageRequest } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-// TODO: replace with readResumeSummary() from lib/resume/store.
-const PLACEHOLDER_RESUME_SUMMARY = "Very perfect resume";
 
 // Compiled once per server process, not per request.
 const graph = buildGraph();
@@ -79,10 +74,30 @@ export async function POST(request: Request) {
     );
   }
 
+  // Read the stored resume BEFORE invoking. Scoring a posting against nothing
+  // produces a confident, meaningless answer and still costs model calls.
+  let stored;
+  try {
+    stored = await readResumeSummary();
+  } catch (error) {
+    console.error("[triage:resume]", error);
+    return NextResponse.json<TriageErrorResponse>(
+      { error: "Could not read your stored resume." },
+      { status: 500 },
+    );
+  }
+
+  if (!stored) {
+    return NextResponse.json<TriageErrorResponse>(
+      { error: "Add your CV first — POST it to /api/resume." },
+      { status: 400 },
+    );
+  }
+
   try {
     const result = await graph.invoke({
       jobInput: sniffJobInput(jobInput),
-      resumeSummary: PLACEHOLDER_RESUME_SUMMARY,
+      resumeSummary: stored.summary,
     });
     return NextResponse.json(result);
   } catch (error) {

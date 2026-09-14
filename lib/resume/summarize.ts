@@ -37,6 +37,30 @@
 
 import "server-only";
 
+/**
+ * FAKE. Returns a realistic summary rather than a placeholder string, on
+ * purpose: score_fit will eventually judge a real posting against whatever is
+ * stored here. "fake summary" would produce nonsense fit scores and you'd burn
+ * a real model call working out why.
+ *
+ * It carries the three things the real version must preserve — primary stack,
+ * secondary stack, and caveats stated explicitly.
+ *
+ * TODO: replace with one ChatAnthropic call. Prompt must:
+ * - carry caveats forward VERBATIM, not paraphrased. A summary that flattens
+ *   "side project" into "experience with Vue" puts a lie in every cover letter
+ * - keep primary vs secondary distinct — score_fit weights them differently
+ * - forbid invention: omission is fine, embellishment is not
+ * - strip contact details, so they never reach the provider on later calls
+ */
 export async function summarizeResume(resumeText: string): Promise<string> {
-  throw new Error("summarizeResume not implemented");
+  const wordCount = resumeText.trim().split(/\s+/).length;
+
+  return [
+    "PRIMARY STACK (production experience): React, Next.js, TypeScript, Node.js, Python, Django.",
+    "SECONDARY (working knowledge): React Native, Laravel, testing frameworks.",
+    "CAVEATS: Vue is side-project only — no production experience.",
+    "Senior full-stack engineer. Comfortable owning frontend architecture, REST API design, and CI/CD.",
+    `[placeholder summary — generated from ${wordCount} words of input, not a model]`,
+  ].join("\n");
 }
