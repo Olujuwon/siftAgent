@@ -4,7 +4,7 @@
  * triage.
  *
  * STATUS
- * Text path works. summarizeResume is still a fake; the PDF path is TODO.
+ * Both input paths work. summarizeResume is still a fake.
  *
  * ROUTES
  * - POST   /api/resume   store a summary of pasted CV text
@@ -12,16 +12,10 @@
  * - DELETE /api/resume   remove the stored summary
  *
  * PIPELINE
- *   text -> summarizeResume() -> writeResumeSummary()
- *   TODO PDF: FormData -> parsePdf() -> summarizeResume() -> write
+ *   JSON  { resumeText }      -> summarizeResume() -> writeResumeSummary()
+ *   multipart FormData "file" -> parsePdf() -> summarizeResume() -> write
  *
- * TODO — the PDF path
- * 1. Branch on Content-Type; multipart means await request.formData().
- * 2. Check file.size BEFORE reading bytes. ~5MB cap.
- * 3. parsePdf(new Uint8Array(await file.arrayBuffer())).
- * 4. 400 with a message naming the cause — "scanned PDF with no text layer" is
- *    actionable, "invalid file" is not.
- * 5. Blocked on a Node upgrade: every parser needs >=20.16 or >=22.
+ * The two paths are told apart by Content-Type, and converge in extractResume.
  *
  * GOTCHAS
  * - Never write the PDF to disk. PII, and nothing downstream needs it.
@@ -37,6 +31,7 @@
 
 import { NextResponse } from "next/server";
 
+import { MAX_PDF_BYTES, PdfParseError, parsePdf } from "@/lib/resume/parsePdf";
 import { summarizeResume } from "@/lib/resume/summarize";
 import {
   clearResumeSummary,
@@ -63,14 +58,60 @@ export const runtime = "nodejs";
  */
 const MAX_RESUME_CHARS = 100_000;
 
+/** What the two input paths produce, before summarising. */
+type ExtractedResume = { text: string; sourceFilename: string };
+
 /**
- * POST — accepts pasted CV text as JSON, summarises it, stores the summary.
+ * Pull CV text out of the request, whichever way it arrived.
  *
- * TODO: add the PDF path. That arrives as multipart FormData, not JSON, so it
- * branches on Content-Type: `await request.formData()`, pull the file field,
- * `await file.arrayBuffer()` -> parsePdf(). Blocked on a Node upgrade.
+ * Returns a Response on failure rather than throwing, so the caller can return
+ * it directly with the right status. PdfParseError messages are written for the
+ * user and safe to forward; nothing else is.
  */
-export async function POST(request: Request) {
+async function extractResume(
+  request: Request,
+): Promise<ExtractedResume | Response> {
+  const contentType = request.headers.get("content-type") ?? "";
+
+  // ── PDF path ──
+  if (contentType.includes("multipart/form-data")) {
+    const form = await request.formData();
+    const file = form.get("file");
+
+    if (!(file instanceof File)) {
+      return NextResponse.json<ResumeErrorResponse>(
+        { error: "No file received." },
+        { status: 400 },
+      );
+    }
+
+    // Checked before reading bytes — file.size is known up front, so an
+    // oversized upload never reaches memory.
+    if (file.size > MAX_PDF_BYTES) {
+      return NextResponse.json<ResumeErrorResponse>(
+        { error: "That PDF is too large. The limit is 5MB." },
+        { status: 413 },
+      );
+    }
+
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      return { text: await parsePdf(bytes), sourceFilename: file.name };
+    } catch (error) {
+      console.error("[resume:pdf]", error);
+      return NextResponse.json<ResumeErrorResponse>(
+        {
+          error:
+            error instanceof PdfParseError
+              ? error.message
+              : "That PDF could not be read.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
+  // ── Text path ──
   let resumeText: string;
   try {
     ({ resumeText } = (await request.json()) as ResumeUploadRequest);
@@ -95,11 +136,18 @@ export async function POST(request: Request) {
     );
   }
 
+  return { text: resumeText, sourceFilename: "pasted text" };
+}
+
+export async function POST(request: Request) {
+  const extracted = await extractResume(request);
+  if (extracted instanceof Response) return extracted;
+
   try {
     const stored = {
-      summary: await summarizeResume(resumeText),
+      summary: await summarizeResume(extracted.text),
       updatedAt: new Date().toISOString(),
-      sourceFilename: "pasted text",
+      sourceFilename: extracted.sourceFilename,
     };
     await writeResumeSummary(stored);
 

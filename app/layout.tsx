@@ -10,8 +10,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      {/* Plain utility classes only — real styling comes once the graph works. */}
-      <body className="mx-auto max-w-2xl px-6 py-10">{children}</body>
+      {/*
+        h-dvh, not h-screen: 100vh is wrong on mobile browsers, where the
+        address bar is counted in but then overlays the page. dvh tracks the
+        actual visible area.
+        overflow-hidden confines scrolling to the panes inside, so the page
+        itself never scrolls on desktop. Mobile opts back out — see page.tsx.
+      */}
+      <body className="h-dvh overflow-hidden">{children}</body>
     </html>
   );
 }

@@ -48,6 +48,13 @@ export function JobForm({ onResult }: JobFormProps) {
   const [isTextAreaLocked, setIsTextAreaLocked] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  // The input that produced the current result. Re-submitting it unchanged
+  // reruns the whole graph — 3 searches and 4 model calls once the fakes are
+  // gone — for an answer we already have. Nothing caches it.
+  const [triagedInput, setTriagedInput] = useState<string | null>(null);
+
+  const trimmedInput = jobInput.trim();
+  const isAlreadyTriaged = trimmedInput !== "" && trimmedInput === triagedInput;
 
   async function handleSubmit(event: React.FormEvent) {
            event.preventDefault();
@@ -64,6 +71,7 @@ export function JobForm({ onResult }: JobFormProps) {
              }
             setIsTextAreaLocked(false);
              onResult(await response.json());
+             setTriagedInput(trimmedInput);
            } catch(error: unknown) {
             setError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
            }
@@ -89,16 +97,23 @@ export function JobForm({ onResult }: JobFormProps) {
         {error && (
           <ErrorComponent message={error} onDismiss={handleCloseErrorToast}/>
         )}
-      <button
-        type="submit"
-        className="inline-flex items-center justify-center gap-2 self-start rounded-md bg-gray-900 px-16 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
-        disabled={isLoading || jobInput.trim() === ""}
-      >
-          {isLoading && isTextAreaLocked && (
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          )}
-          {isLoading && isTextAreaLocked ? "Triaging" : "Triage"}
-      </button>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <button
+          type="submit"
+          className="inline-flex items-center justify-center gap-2 self-start rounded-md bg-gray-900 px-16 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
+          disabled={isLoading || trimmedInput === "" || isAlreadyTriaged}
+        >
+            {isLoading && isTextAreaLocked && (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            )}
+            {isLoading && isTextAreaLocked ? "Triaging" : "Triage"}
+        </button>
+        {isAlreadyTriaged && !isLoading && (
+          <span className="text-xs text-gray-500">
+            Already triaged. Edit the posting to run again.
+          </span>
+        )}
+      </div>
     </form>
   );
 }
