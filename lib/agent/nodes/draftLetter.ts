@@ -28,16 +28,18 @@
  *   structured object instead of a string, so caveats are data not prose.
  */
 
+import { hasAnthropicKey } from "@/lib/config";
 import type { SiftStateType } from "../state";
 
 export async function draftLetter(
   state: SiftStateType,
 ): Promise<Partial<SiftStateType>> {
-  // TODO: replace with a real model call. Prompt from jobText + resumeSummary +
-  // searchResults + fitScore.reasoning, applying the style rules above. Plain
-  // string output — no structured output needed here.
-  //
-  // Placeholder for now so the graph terminates and the loop can be observed.
+  if (hasAnthropicKey) {
+    // TODO: prompt from jobText + resumeSummary + searchResults +
+    // fitScore.reasoning, applying the style rules above. Plain string out.
+    throw new Error("draftLetter: real model call not implemented yet");
+  }
+
   return {
     letterDraft: `TODO: cover letter opener. Fit score ${state.fitScore?.score ?? "n/a"} after ${state.attempts} research pass(es).`,
   };

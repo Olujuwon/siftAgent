@@ -37,6 +37,8 @@
 
 import "server-only";
 
+import { hasAnthropicKey } from "@/lib/config";
+
 /**
  * FAKE. Returns a realistic summary rather than a placeholder string, on
  * purpose: score_fit will eventually judge a real posting against whatever is
@@ -54,6 +56,17 @@ import "server-only";
  * - strip contact details, so they never reach the provider on later calls
  */
 export async function summarizeResume(resumeText: string): Promise<string> {
+  if (hasAnthropicKey) {
+    // TODO: one ChatAnthropic call, per the rules above. Plain string out — no
+    // structured output needed, since resumeSummary is a string in state.
+    throw new Error("summarizeResume: real model call not implemented yet");
+  }
+
+  return demoSummary(resumeText);
+}
+
+/** Used when no ANTHROPIC_API_KEY is configured. See lib/config.ts. */
+function demoSummary(resumeText: string): string {
   const wordCount = resumeText.trim().split(/\s+/).length;
 
   return [
@@ -61,6 +74,6 @@ export async function summarizeResume(resumeText: string): Promise<string> {
     "SECONDARY (working knowledge): React Native, Laravel, testing frameworks.",
     "CAVEATS: Vue is side-project only — no production experience.",
     "Senior full-stack engineer. Comfortable owning frontend architecture, REST API design, and CI/CD.",
-    `[placeholder summary — generated from ${wordCount} words of input, not a model]`,
+    `[demo mode — ${wordCount} words received, but no model was called]`,
   ].join("\n");
 }

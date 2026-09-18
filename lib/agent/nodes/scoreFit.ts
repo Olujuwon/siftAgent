@@ -46,6 +46,7 @@
  *     .toBe("draft_letter");
  */
 
+import { hasAnthropicKey } from "@/lib/config";
 import { MAX_RESEARCH_ATTEMPTS } from "../state";
 import type { SearchResult, SiftStateType } from "../state";
 
@@ -72,6 +73,12 @@ function estimateConfidence(evidence: SearchResult[]): "low" | "medium" | "high"
 export async function scoreFit(
   state: SiftStateType,
 ): Promise<Partial<SiftStateType>> {
+  if (hasAnthropicKey) {
+    // TODO: prompt with jobText + resumeSummary + evidence grouped by
+    // queryAngle, then withStructuredOutput(fitScoreSchema).
+    throw new Error("scoreFit: real model call not implemented yet");
+  }
+
   const evidence = state.searchResults
     .filter((result) => result.relevance > RELEVANCE_FLOOR)
     .sort((a, b) => b.relevance - a.relevance)

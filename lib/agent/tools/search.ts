@@ -34,6 +34,7 @@
 
 import "server-only";
 
+import { hasTavilyKey } from "@/lib/config";
 import type { SearchResult } from "../state";
 import sampleJobPost from "../sampleJobPost.json";
 
@@ -54,6 +55,12 @@ import sampleJobPost from "../sampleJobPost.json";
 export async function search(
   query: string,
 ): Promise<Omit<SearchResult, "attempt">[]> {
+  if (hasTavilyKey) {
+    // TODO: real Tavily search. Map its `score` to `relevance`, leave
+    // `rawContent` out — it would bloat state and the score_fit prompt.
+    throw new Error("search: real Tavily call not implemented yet");
+  }
+
   return [1, 2, 3].map((n) => ({
     title: `Result ${n} for: ${query}`,
     url: `https://example.com/${encodeURIComponent(query)}/${n}`,
@@ -64,6 +71,13 @@ export async function search(
 }
 
 export async function extract(url: string): Promise<string> {
+  if (hasTavilyKey) {
+    // TODO: real Tavily extract. Takes an ARRAY of urls and returns
+    // { results, failedResults } — a failure does not throw, it lands in
+    // failedResults, which is the login-walled-posting case.
+    throw new Error("extract: real Tavily call not implemented yet");
+  }
+
   if (!url.startsWith("http")) {
     throw new Error("Tavily extract not implemented");
   }else{

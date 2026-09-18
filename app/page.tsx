@@ -11,7 +11,9 @@
  * one level deeper instead.
  */
 
+import { DemoBanner } from "@/components/DemoBanner";
 import { TriagePanel } from "@/components/TriagePanel";
+import { hasAnthropicKey, hasTavilyKey } from "@/lib/config";
 
 export default function Page() {
   return (
@@ -25,6 +27,10 @@ export default function Page() {
           Paste a posting. Get a fit score and a cover letter opener.
         </p>
       </header>
+
+      {/* page.tsx is a Server Component, so it reads env directly and passes
+          booleans down — no client round-trip, no keys near the browser. */}
+      <DemoBanner hasAnthropicKey={hasAnthropicKey} hasTavilyKey={hasTavilyKey} />
 
       <TriagePanel />
     </main>

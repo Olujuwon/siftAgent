@@ -39,6 +39,8 @@
 import "server-only";
 
 import { readFile, writeFile, unlink, rename } from "node:fs/promises";
+
+import { isDemoMode } from "@/lib/config";
 import path from "node:path";
 
 export const RESUME_SUMMARY_PATH = ".resume-summary.local.json";
@@ -74,7 +76,51 @@ function isMissingFileError(error: unknown): boolean {
   );
 }
 
+/**
+ * Set when the filesystem refuses writes — serverless hosts mount the app
+ * read-only, and /tmp is per-instance and ephemeral anyway. Holding the summary
+ * here keeps uploads working for the life of the process, which covers a
+ * visitor's session on the demo deployment. Lost on restart, by design.
+ *
+ * Phase 2's database is the real answer; this is deliberate demo degradation.
+ */
+let inMemorySummary: StoredResumeSummary | null = null;
+
+/** Read-only mount (serverless) or a permissions problem. */
+function isReadOnlyError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  const { code } = error as { code: unknown };
+  return code === "EROFS" || code === "EACCES" || code === "EPERM";
+}
+
+/**
+ * Seeded CV for the public demo. Returned when nothing is stored, so a visitor
+ * lands on a working app instead of an empty form — they can triage a posting
+ * immediately without pasting their own CV.
+ *
+ * ONLY in demo mode. On a real instance, nothing stored means nothing stored:
+ * the user uploads their own CV and should never be scored against a sample.
+ */
+const DEMO_RESUME: StoredResumeSummary = {
+  summary: [
+    "PRIMARY STACK (production experience): React, Next.js, TypeScript, Node.js, Python, Django.",
+    "SECONDARY (working knowledge): React Native, Laravel, testing frameworks.",
+    "CAVEATS: Vue is side-project only — no production experience.",
+    "Senior full-stack engineer, Helsinki. Owns frontend architecture, REST API design and CI/CD.",
+    "[sample CV — upload or paste your own to replace it]",
+  ].join("\n"),
+  updatedAt: new Date(0).toISOString(),
+  sourceFilename: "sample CV",
+};
+
+/** Nothing stored: a sample on the public demo, genuinely nothing otherwise. */
+function emptyResult(): StoredResumeSummary | null {
+  return isDemoMode ? DEMO_RESUME : null;
+}
+
 export async function readResumeSummary(): Promise<StoredResumeSummary | null> {
+  if (inMemorySummary) return inMemorySummary;
+
   let raw: string;
 
   try {
@@ -82,8 +128,10 @@ export async function readResumeSummary(): Promise<StoredResumeSummary | null> {
     raw = await readFile(summaryPath(), "utf8");
   } catch (error) {
     // No file yet is the normal first-run state, not a failure.
-    if (isMissingFileError(error)) return null;
-    // Anything else — permissions, a directory in the way — is real. Let it out.
+    if (isMissingFileError(error)) return emptyResult();
+    // A read-only mount can also surface as EACCES/EPERM — same meaning here.
+    if (isReadOnlyError(error)) return emptyResult();
+    // Anything else — a directory in the way, say — is real. Let it out.
     throw error;
   }
 
@@ -111,23 +159,30 @@ export async function writeResumeSummary(
   const target = summaryPath();
   const temp = `${target}.tmp`;
 
-  await writeFile(temp, JSON.stringify(value, null, 2), "utf8");
-
   try {
-    await rename(temp, target);
+    await writeFile(temp, JSON.stringify(value, null, 2), "utf8");
+    try {
+      await rename(temp, target);
+    } catch (error) {
+      // Don't leave the temp file behind if the rename failed.
+      await unlink(temp).catch(() => {});
+      throw error;
+    }
+    inMemorySummary = null; // the file is now authoritative
   } catch (error) {
-    // Don't leave the temp file behind if the rename failed.
-    await unlink(temp).catch(() => {});
-    throw error;
+    if (!isReadOnlyError(error)) throw error;
+    // Read-only filesystem: keep it in memory so the upload still works.
+    inMemorySummary = value;
   }
 }
 
 /** Deleting a file that isn't there is a success, not a failure. */
 export async function clearResumeSummary(): Promise<void> {
+  inMemorySummary = null;
   try {
     await unlink(summaryPath());
   } catch (error) {
-    if (isMissingFileError(error)) return;
+    if (isMissingFileError(error) || isReadOnlyError(error)) return;
     throw error;
   }
 }
