@@ -95,11 +95,21 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Wall clock for the whole invocation. The per-node figures come from the
+    // `timings` channel; this is the number that includes graph overhead.
+    const startedAt = Date.now();
     const result = await graph.invoke({
       jobInput: sniffJobInput(jobInput),
       resumeSummary: stored.summary,
     });
-    return NextResponse.json(result);
+    const durationMs = Date.now() - startedAt;
+
+    console.log(
+      `[triage] ${durationMs}ms · ${result.attempts} pass(es) · ` +
+        result.timings.map((t) => `${t.node} ${t.durationMs}ms`).join(", "),
+    );
+
+    return NextResponse.json({ ...result, durationMs });
   } catch (error) {
     console.error("[triage]", error);
     return NextResponse.json<TriageErrorResponse>(

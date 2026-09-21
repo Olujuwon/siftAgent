@@ -4,33 +4,24 @@
  * Also holds `routeAfterScore`, the conditional edge's target selector.
  *
  * STATUS
- * scoreFit is a HEURISTIC placeholder — no model call yet. It exists to drive
- * the conditional edge deterministically while the graph is being wired.
- * routeAfterScore is still a stub.
+ * Real: one Claude call with structured output when ANTHROPIC_API_KEY is set,
+ * heuristic otherwise.
  *
  * EXPORTS
  * - scoreFit(state) -> Partial<state>              sets fitScore
  * - routeAfterScore(state) -> "research" | "draft_letter"
- *
- * TODO — replace the heuristic with a real model call
- * 1. Prompt with jobText + resumeSummary + accumulated searchResults, grouped
- *    by queryAngle so "we searched and found nothing" is distinguishable from
- *    "we never searched".
- * 2. Use withStructuredOutput(fitScoreSchema) so the result is validated, not
- *    parsed out of prose.
- * 3. Include the pass count and angles tried — researchGaps is meaningless
- *    without them.
- * 4. Return { fitScore }. Do NOT touch `attempts`; research owns that counter.
  *
  * ROUTING RULES — routeAfterScore, in this order
  * 1. attempts >= MAX_RESEARCH_ATTEMPTS  -> "draft_letter"  ALWAYS, no exceptions
  * 2. score uncertain, or research thin  -> "research"
  * 3. otherwise                          -> "draft_letter"
  *
- * THE REAL STACK — ground the judgement in this, don't let the model inflate
- * - primary:   React, Next.js, TypeScript, Node.js, Python, Django
- * - secondary: React Native, Laravel, testing frameworks
- * - anything not listed is NOT experience
+ * NO HARDCODED STACK — DELIBERATE
+ * An earlier draft listed the candidate's primary and secondary technologies
+ * here. That's now wrong twice over: summarizeResume already classifies them
+ * per-CV from actual evidence, and a hardcoded list would contradict it (it
+ * did — on Python, Django and Java). It also only ever worked for one person.
+ * Trust resumeSummary.
  *
  * GOTCHAS
  * - Check the attempts cap FIRST. Confidence never overrides it, or the graph
@@ -46,9 +37,12 @@
  *     .toBe("draft_letter");
  */
 
+import { createModel } from "@/lib/ai/model";
 import { hasAnthropicKey } from "@/lib/config";
+import { fitScoreSchema } from "../state";
 import { MAX_RESEARCH_ATTEMPTS } from "../state";
 import type { SearchResult, SiftStateType } from "../state";
+import type { FitScore } from "@/lib/types";
 
 /** Results below this are dropped before they'd reach the prompt. */
 export const RELEVANCE_FLOOR = 0.6;
@@ -70,15 +64,131 @@ function estimateConfidence(evidence: SearchResult[]): "low" | "medium" | "high"
   return "high";
 }
 
+const SYSTEM_PROMPT = `You judge whether a job posting fits a specific engineer, for that engineer's own use in deciding whether to apply to THIS posting.
+
+Judge the posting on its own merits. You are not ranking it against other
+openings — you cannot see any — so do not hedge on the possibility of a better
+match existing elsewhere.
+
+The CANDIDATE section is a classified summary of their CV. Treat its structure
+as authoritative:
+- PRIMARY STACK is production experience. Weight it heavily.
+- SECONDARY is side projects, training, or tools listed without context. Real,
+  but much weaker evidence. A posting requiring a SECONDARY technology is a
+  partial match, not a match.
+- CAVEATS are binding. If it says a technology came from training only, the
+  candidate does not have production experience in it. Never upgrade a caveated
+  skill when matching.
+- Anything absent from the summary is NOT experience. Do not infer it from
+  adjacent skills.
+
+The RESEARCH section is what was found about the company. It may be thin or
+empty — that is information, not an excuse to guess. Note which angles were
+searched: a topic that was searched and returned nothing is different from one
+never searched, and only the latter belongs in researchGaps.
+
+Scoring:
+- score is 0-10 for how well the candidate fits THIS posting. 7+ means worth
+  applying to.
+- confidence reflects how much the evidence supports your score. Use "low" when
+  the research did not tell you what you needed about the role or company.
+- researchGaps names what you still need to know. Each entry should be
+  answerable by a web search — it is used verbatim as the next search query.
+  Leave it empty when you have enough.
+- matched and missing hold the posting's requirements, quoted and TRIMMED to
+  the essential phrase. One short line each, no explanation appended — the
+  reasoning field is where explanation goes. At most six entries each; pick the
+  ones that decide the outcome rather than listing everything.
+- reasoning is two or three sentences grounded in matched and missing.
+
+Be honest rather than encouraging. An inflated score wastes the candidate's
+time on an application they will not win.`;
+
+/**
+ * Caps applied AFTER the model returns. The schema no longer rejects long
+ * output — that discarded good answers — so these keep downstream consumers
+ * bounded instead: the UI, and research, which uses researchGaps verbatim as
+ * search queries. Trimming never fails a run; rejecting did.
+ */
+const LIMITS = { researchGaps: 3, matched: 6, missing: 6, queryChars: 150 } as const;
+
+function trimFitScore(fitScore: FitScore): FitScore {
+  return {
+    ...fitScore,
+    researchGaps: fitScore.researchGaps
+      .slice(0, LIMITS.researchGaps)
+      .map((gap) => gap.slice(0, LIMITS.queryChars)),
+    matched: fitScore.matched.slice(0, LIMITS.matched),
+    missing: fitScore.missing.slice(0, LIMITS.missing),
+  };
+}
+
+/** Groups evidence by the query that found it, so gaps are distinguishable. */
+function formatEvidence(evidence: SearchResult[]): string {
+  if (evidence.length === 0) return "No research results yet.";
+
+  const byAngle = new Map<string, SearchResult[]>();
+  for (const result of evidence) {
+    byAngle.set(result.queryAngle, [...(byAngle.get(result.queryAngle) ?? []), result]);
+  }
+
+  return [...byAngle.entries()]
+    .map(([angle, results]) =>
+      [
+        `SEARCHED: ${angle}`,
+        ...results.map((r) => `- ${r.title} (${r.url})\n  ${r.content}`),
+      ].join("\n"),
+    )
+    .join("\n\n");
+}
+
 export async function scoreFit(
   state: SiftStateType,
 ): Promise<Partial<SiftStateType>> {
-  if (hasAnthropicKey) {
-    // TODO: prompt with jobText + resumeSummary + evidence grouped by
-    // queryAngle, then withStructuredOutput(fitScoreSchema).
-    throw new Error("scoreFit: real model call not implemented yet");
-  }
+  if (!hasAnthropicKey) return demoScore(state);
 
+  const evidence = state.searchResults
+    .filter((result) => result.relevance > RELEVANCE_FLOOR)
+    .sort((a, b) => b.relevance - a.relevance)
+    .slice(0, MAX_EVIDENCE);
+
+  const anglesTried = [...new Set(state.searchResults.map((r) => r.queryAngle))];
+
+  // A judgement call, not mechanical work — worth the higher effort.
+  //
+  // maxTokens 8000, not 3000: at 3000 the model ran out mid-JSON on a real
+  // posting and the parse failed. Length is steered by the schema descriptions
+  // and trimmed by trimFitScore afterwards; this is only the backstop, and a
+  // generous one, because a truncated response costs the whole call.
+  //
+  // method: "jsonSchema" uses Anthropic's NATIVE structured output rather than
+  // the default, which is forced tool calling. Forced tool calls are
+  // incompatible with `thinking`, and the default path logs a warning saying so
+  // on every call, then throws OutputParserException if the model happens not
+  // to emit a tool call. Native JSON schema has no such conflict, and skips the
+  // tool-calling overhead.
+  const model = createModel({ maxTokens: 8000, effort: "high" }).withStructuredOutput(
+    fitScoreSchema,
+    { name: "fit_score", method: "jsonSchema" },
+  );
+
+  const fitScore = await model.invoke([
+    { role: "system", content: SYSTEM_PROMPT },
+    {
+      role: "user",
+      content: [
+        `JOB POSTING:\n${state.jobText ?? "(missing)"}`,
+        `CANDIDATE:\n${state.resumeSummary}`,
+        `RESEARCH — ${state.attempts} pass(es), angles searched: ${anglesTried.join(" | ") || "none"}\n${formatEvidence(evidence)}`,
+      ].join("\n\n---\n\n"),
+    },
+  ]);
+
+  return { fitScore: trimFitScore(fitScore) };
+}
+
+/** Used when no ANTHROPIC_API_KEY is configured. See lib/config.ts. */
+function demoScore(state: SiftStateType): Partial<SiftStateType> {
   const evidence = state.searchResults
     .filter((result) => result.relevance > RELEVANCE_FLOOR)
     .sort((a, b) => b.relevance - a.relevance)

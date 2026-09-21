@@ -20,10 +20,39 @@
 
 import type { FitScore, TriageResponse } from "@/lib/types";
 import { CopyButton } from "@/components/CopyButton";
+import { ResearchModal } from "@/components/ResearchModal";
 
 type TriageResultProps = {
   result: TriageResponse;
 };
+
+/**
+ * The threshold the scoring prompt is told about: "7+ means worth applying to".
+ * Stated here so the UI reaches the same conclusion the model was asked for,
+ * rather than leaving the reader to map a number onto a decision.
+ *
+ * Not rendered as a percentage on purpose. The score is an integer 0-10, so
+ * only 0%, 10%, 20%… exist — two digits would imply a precision the scale
+ * cannot produce, and "of what?" has no answer.
+ */
+function verdictFor(score: number): { label: string; className: string } {
+  if (score >= 7) {
+    return {
+      label: "Worth applying",
+      className: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
+    };
+  }
+  if (score >= 4) {
+    return {
+      label: "Marginal",
+      className: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
+    };
+  }
+  return {
+    label: "Poor fit",
+    className: "bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200",
+  };
+}
 
 const CONFIDENCE_STYLES: Record<FitScore["confidence"], string> = {
   low: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
@@ -49,22 +78,31 @@ function Findings({ title, items }: { title: string; items: string[] }) {
 }
 
 export function TriageResult({ result }: TriageResultProps) {
-  const { fitScore, letterDraft, attempts } = result;
+  const { fitScore, letterDraft, attempts, searchResults, timings, durationMs } = result;
+  const verdict = verdictFor(fitScore.score);
 
   return (
     <section className="flex flex-col gap-6 border-t border-gray-200 pt-6 dark:border-gray-800">
       <div className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="text-xl font-semibold tracking-tight">Fit</h2>
-          <span className="text-sm text-gray-500">
-            {attempts} research {attempts === 1 ? "pass" : "passes"}
-          </span>
+          <ResearchModal
+            searchResults={searchResults}
+            timings={timings}
+            durationMs={durationMs}
+            attempts={attempts}
+          />
         </div>
 
         <div className="flex items-center gap-3">
           <span className="text-3xl font-semibold tabular-nums">
             {fitScore.score}
             <span className="text-base font-normal text-gray-500">/10</span>
+          </span>
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${verdict.className}`}
+          >
+            {verdict.label}
           </span>
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-medium ${CONFIDENCE_STYLES[fitScore.confidence]}`}

@@ -50,13 +50,49 @@ import {research} from "@/lib/agent/nodes/research";
 import {intake} from "@/lib/agent/nodes/intake";
 import {routeAfterScore, scoreFit} from "@/lib/agent/nodes/scoreFit";
 import {draftLetter} from "@/lib/agent/nodes/draftLetter";
+import type { SiftStateType, SiftStateUpdate } from "./state";
+
+/**
+ * NOT Partial<SiftStateType>. The Update type permits the wrapper values a
+ * reduced channel accepts (an explicit Overwrite, say), which Partial<State>
+ * does not — so Update is the wider, correct type for what a node returns.
+ * The nodes themselves declare Partial<State>, which is assignable to this.
+ */
+type Node = (state: SiftStateType) => Promise<SiftStateUpdate>;
+
+/**
+ * Wraps a node so it records how long it took.
+ *
+ * The duration goes into the `timings` channel, which APPENDS — so a node
+ * inside the loop contributes one entry per pass. That per-pass breakdown is
+ * the point: a single total tells you a triage was slow, this tells you which
+ * node, and how many times it ran.
+ *
+ * Timing is logged even when the node throws, then the error is rethrown — a
+ * node that failed after 30 seconds is exactly the one you want to see.
+ */
+function withTiming(name: string, node: Node): Node {
+  return async (state) => {
+    const startedAt = Date.now();
+    try {
+      const update = await node(state);
+      return {
+        ...update,
+        timings: [{ node: name, durationMs: Date.now() - startedAt }],
+      };
+    } catch (error) {
+      console.error(`[graph:${name}] failed after ${Date.now() - startedAt}ms`, error);
+      throw error;
+    }
+  };
+}
 
 export function buildGraph() {
   return new StateGraph(SiftState)
-      .addNode("intake", intake)
-      .addNode("research", research)
-      .addNode("score_fit", scoreFit)
-      .addNode("draft_letter", draftLetter)
+      .addNode("intake", withTiming("intake", intake))
+      .addNode("research", withTiming("research", research))
+      .addNode("score_fit", withTiming("score_fit", scoreFit))
+      .addNode("draft_letter", withTiming("draft_letter", draftLetter))
       .addEdge(START, "intake")
       .addEdge("intake", "research")
       .addEdge("research", "score_fit")

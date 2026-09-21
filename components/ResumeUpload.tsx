@@ -49,6 +49,29 @@ async function readError(response: Response, fallback: string): Promise<string> 
   return body?.error ?? fallback;
 }
 
+/**
+ * Size of the stored summary, so the word cap in summarize.ts can be tuned
+ * against real output instead of guessed at.
+ *
+ * The token figure is an ESTIMATE — roughly 4 characters per token for English
+ * prose. Real tokenisation varies with punctuation and rare words; the exact
+ * count needs the provider's count_tokens endpoint, which isn't worth a network
+ * call here. It's the right order of magnitude for deciding whether the cap
+ * is too tight.
+ */
+function SummarySize({ summary }: { summary: string }) {
+  const characters = summary.length;
+  const words = summary.trim().split(/\s+/).filter(Boolean).length;
+  const estimatedTokens = Math.round(characters / 4);
+
+  return (
+    <p className="border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-gray-800">
+      {characters.toLocaleString()} characters · {words.toLocaleString()} words ·
+      ~{estimatedTokens.toLocaleString()} tokens (estimate)
+    </p>
+  );
+}
+
 export function ResumeUpload({ onChange }: ResumeUploadProps) {
   const [status, setStatus] = useState<ResumeStatusResponse | null>(null);
   const [resumeText, setResumeText] = useState("");
@@ -201,9 +224,12 @@ export function ResumeUpload({ onChange }: ResumeUploadProps) {
             onClose={() => setIsSummaryOpen(false)}
             title="What the agent scores against"
           >
-            <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-              {status.summary}
-            </p>
+            <div className="flex flex-col gap-3">
+              <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+                {status.summary}
+              </p>
+              <SummarySize summary={status.summary} />
+            </div>
           </Modal>
         </>
       )}

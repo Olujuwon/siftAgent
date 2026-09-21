@@ -52,12 +52,50 @@ export type TriageRequest = {
   jobInput: string;
 };
 
+/**
+ * One research hit, as shown to the browser.
+ *
+ * MIRRORS `searchResultSchema` in lib/agent/state.ts — state.ts asserts the two
+ * match, so drift is a compile error there. Hand-written here for the same
+ * reason as FitScore: this module imports nothing.
+ */
+export type SearchResult = {
+  title: string;
+  url: string;
+  content: string;
+  /** Tavily's relevance for the query that found it, not fit. */
+  relevance: number;
+  publishedDate?: string;
+  /** Which loop pass produced this. */
+  attempt: number;
+  /** The query that found it. */
+  queryAngle: string;
+};
+
+/**
+ * How long one node took, recorded per invocation.
+ *
+ * A node inside the loop appears once per pass, so score_fit shows up three
+ * times on a full run. That per-pass breakdown is the point: a total tells you
+ * a triage was slow, this tells you which node and how many times.
+ */
+export type NodeTiming = {
+  node: string;
+  durationMs: number;
+};
+
 /** Success response from `POST /api/triage`. */
 export type TriageResponse = {
   fitScore: FitScore;
   letterDraft: string;
   /** How many research loops ran — the only outside view of whether the loop fired. */
   attempts: number;
+  /** Everything the research node found, across all passes. */
+  searchResults: SearchResult[];
+  /** Per-node durations, in the order they ran. */
+  timings: NodeTiming[];
+  /** Wall-clock for the whole graph invocation, measured in the route. */
+  durationMs: number;
 };
 
 /** Keep the message generic; never forward provider errors verbatim. */
