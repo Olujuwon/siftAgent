@@ -18,6 +18,10 @@
  * min-h-0 / min-w-0 appear throughout on purpose. A flex or grid child defaults
  * to min-size:auto, meaning it will not shrink below its content — which
  * silently defeats every `overflow-y-auto` inside it.
+ *
+ * The two PANES get lg:min-h-0, not min-h-0. On mobile they don't scroll
+ * themselves, the grid does. With min-h-0 there, the grid squeezes both rows
+ * into its own height and the result row draws over the inputs.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -62,7 +66,7 @@ export function TriagePanel() {
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto lg:grid-cols-2 lg:overflow-hidden">
       {/* Inputs */}
-      <div className="flex min-h-0 min-w-0 flex-col gap-4 lg:overflow-y-auto lg:pr-1">
+      <div className="flex lg:min-h-0 min-w-0 flex-col gap-4 lg:overflow-y-auto lg:pr-1">
         <ResumeUpload onChange={handleResumeChange} />
 
         {/*
@@ -84,7 +88,7 @@ export function TriagePanel() {
       {/* Result */}
       <div
         ref={resultRef}
-        className="flex min-h-0 min-w-0 flex-col lg:overflow-y-auto lg:pl-1"
+        className="flex lg:min-h-0 min-w-0 flex-col lg:overflow-y-auto lg:pl-1"
       >
         {result ? (
           <TriageResult result={result} />
