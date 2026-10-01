@@ -26,15 +26,13 @@
 
 import { NextResponse } from "next/server";
 
-import { buildGraph } from "@/lib/agent/graph";
+import { graph } from "@/lib/agent/graph";
 import type { JobInput } from "@/lib/agent/state";
+import { ExtractError } from "@/lib/agent/tools/search";
 import { readResumeSummary } from "@/lib/resume/store";
-import type { TriageErrorResponse, TriageRequest } from "@/lib/types";
+import type { TriageErrorResponse, TriageRequest, TriageResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-// Compiled once per server process, not per request.
-const graph = buildGraph();
 
 /**
  * Decide whether the pasted string is a URL or raw posting text.
@@ -98,19 +96,54 @@ export async function POST(request: Request) {
     // Wall clock for the whole invocation. The per-node figures come from the
     // `timings` channel; this is the number that includes graph overhead.
     const startedAt = Date.now();
-    const result = await graph.invoke({
-      jobInput: sniffJobInput(jobInput),
-      resumeSummary: stored.summary,
-    });
+
+    // With a checkpointer, every run needs a thread_id: it's the key the saved
+    // state is stored under. A fresh one per triage, returned so the letter
+    // route can resume this exact run.
+    const threadId = crypto.randomUUID();
+    const config = { configurable: { thread_id: threadId } };
+    const result = await graph.invoke(
+      { jobInput: sniffJobInput(jobInput), resumeSummary: stored.summary },
+      config,
+    );
     const durationMs = Date.now() - startedAt;
 
+    // A paused run doesn't throw; invoke() just returns the state so far. Ask
+    // the checkpointer whether draft_letter is still waiting to run. The letter
+    // route asks the same question, so both agree on what "paused" means.
+    const { next } = await graph.getState(config);
+    const letterPending = next.includes("draft_letter");
+
     console.log(
-      `[triage] ${durationMs}ms · ${result.attempts} pass(es) · ` +
+      `[triage] ${durationMs}ms · ${result.attempts} pass(es)` +
+        (letterPending ? " · letter pending" : "") +
+        " · " +
         result.timings.map((t) => `${t.node} ${t.durationMs}ms`).join(", "),
     );
 
-    return NextResponse.json({ ...result, durationMs });
+    // Fields listed, not spread: the raw result also carries jobText, the
+    // resume summary and LangGraph's own keys, none of which the browser needs.
+    return NextResponse.json<TriageResponse>({
+      fitScore: result.fitScore!,
+      letterDraft: result.letterDraft,
+      letterPending,
+      threadId,
+      attempts: result.attempts,
+      company: result.company ?? null,
+      searchResults: result.searchResults,
+      timings: result.timings,
+      durationMs,
+    });
   } catch (error) {
+    // A URL we couldn't read is the user's problem to fix, not ours — say so,
+    // with a 400 and an actionable message. Everything else stays generic,
+    // since provider errors can carry request details that shouldn't leak.
+    if (error instanceof ExtractError) {
+      return NextResponse.json<TriageErrorResponse>(
+        { error: error.message },
+        { status: 400 },
+      );
+    }
     console.error("[triage]", error);
     return NextResponse.json<TriageErrorResponse>(
       { error: "Triage failed. Please try again." },

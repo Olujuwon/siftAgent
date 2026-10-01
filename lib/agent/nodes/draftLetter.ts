@@ -18,10 +18,24 @@
  * - Plain string out. No structured output — letterDraft is a string in state.
  * - Runs once per triage, after the loop has finished, so it sees the
  *   accumulated research rather than one pass.
+ *
+ * ON DEMAND BELOW THE THRESHOLD
+ * A score >= WORTH_APPLYING_SCORE drafts straight away. Below it, the node
+ * calls interrupt(): the graph pauses here, its state is saved by the
+ * checkpointer, and the triage route returns with letterPending. If the user
+ * clicks "Draft cover letter", POST /api/triage/letter resumes the run with
+ * Command({ resume: true }).
+ *
+ * - interrupt() MUST be the first thing in the node. On resume the node runs
+ *   again FROM THE TOP, and interrupt() returns the resume value instead of
+ *   throwing. Anything above it (a model call, say) would run twice.
+ * - Demo mode pauses too, so the public demo shows the same flow.
  */
 
 import { createModel } from "@/lib/ai/model";
 import { hasAnthropicKey } from "@/lib/config";
+import { WORTH_APPLYING_SCORE } from "@/lib/constants";
+import { interrupt } from "@langchain/langgraph";
 import type { SiftStateType } from "../state";
 
 const SYSTEM_PROMPT = `You write the OPENING of a cover letter — the first two paragraphs, not a whole letter. Someone will finish it themselves.
@@ -75,6 +89,13 @@ commentary about what you wrote.`;
 export async function draftLetter(
   state: SiftStateType,
 ): Promise<Partial<SiftStateType>> {
+  // First line on purpose — see ON DEMAND above. The first run throws here and
+  // the graph pauses; the resumed run gets the resume value back and carries on.
+  const score = state.fitScore?.score ?? 0;
+  if (score < WORTH_APPLYING_SCORE) {
+    interrupt({ reason: "below_threshold", score });
+  }
+
   if (!hasAnthropicKey) return demoLetter(state);
 
   // Writing, not analysis. The judgement already happened in score_fit, and its

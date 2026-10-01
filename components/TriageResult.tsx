@@ -19,15 +19,16 @@
  */
 
 import type { FitScore, TriageResponse } from "@/lib/types";
-import { CopyButton } from "@/components/CopyButton";
+import { LetterSection } from "@/components/LetterSection";
 import { ResearchModal } from "@/components/ResearchModal";
+import { WORTH_APPLYING_SCORE } from "@/lib/constants";
 
 type TriageResultProps = {
   result: TriageResponse;
 };
 
 /**
- * The threshold the scoring prompt is told about: "7+ means worth applying to".
+ * WORTH_APPLYING_SCORE is the threshold the scoring prompt is told about.
  * Stated here so the UI reaches the same conclusion the model was asked for,
  * rather than leaving the reader to map a number onto a decision.
  *
@@ -36,7 +37,7 @@ type TriageResultProps = {
  * cannot produce, and "of what?" has no answer.
  */
 function verdictFor(score: number): { label: string; className: string } {
-  if (score >= 7) {
+  if (score >= WORTH_APPLYING_SCORE) {
     return {
       label: "Worth applying",
       className: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
@@ -78,7 +79,8 @@ function Findings({ title, items }: { title: string; items: string[] }) {
 }
 
 export function TriageResult({ result }: TriageResultProps) {
-  const { fitScore, letterDraft, attempts, searchResults, timings, durationMs } = result;
+  const { fitScore, letterDraft, threadId, attempts, company, searchResults, timings, durationMs } =
+    result;
   const verdict = verdictFor(fitScore.score);
 
   return (
@@ -87,6 +89,7 @@ export function TriageResult({ result }: TriageResultProps) {
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="text-xl font-semibold tracking-tight">Fit</h2>
           <ResearchModal
+            company={company}
             searchResults={searchResults}
             timings={timings}
             durationMs={durationMs}
@@ -122,15 +125,13 @@ export function TriageResult({ result }: TriageResultProps) {
         <Findings title="Still unknown" items={fitScore.researchGaps} />
       </div>
 
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-4">
-          <h3 className="text-sm font-medium">Cover letter opener</h3>
-          <CopyButton value={letterDraft} label="Copy letter" />
-        </div>
-        <p className="whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-sm text-gray-700 dark:bg-gray-900 dark:text-gray-300">
-          {letterDraft}
-        </p>
-      </div>
+      {/* key: a new triage remounts it, so a drafted letter doesn't carry over. */}
+      <LetterSection
+        key={threadId}
+        initialDraft={letterDraft}
+        threadId={threadId}
+        score={fitScore.score}
+      />
     </section>
   );
 }

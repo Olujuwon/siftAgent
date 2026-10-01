@@ -13,8 +13,9 @@
  *
  * ROUTING RULES — routeAfterScore, in this order
  * 1. attempts >= MAX_RESEARCH_ATTEMPTS  -> "draft_letter"  ALWAYS, no exceptions
- * 2. score uncertain, or research thin  -> "research"
- * 3. otherwise                          -> "draft_letter"
+ * 2. company is null                    -> "draft_letter"  nothing to research
+ * 3. score uncertain, or research thin  -> "research"
+ * 4. otherwise                          -> "draft_letter"
  *
  * NO HARDCODED STACK — DELIBERATE
  * An earlier draft listed the candidate's primary and secondary technologies
@@ -28,7 +29,7 @@
  *   can spin forever. This costs credits rather than throwing, so it fails
  *   quietly.
  * - fitScore needs to express uncertainty and research thinness, not just a
- *   number. Rule 2 is unimplementable otherwise.
+ *   number. Rule 3 is unimplementable otherwise.
  * - routeAfterScore is a PURE function of state. Keep it that way — it's the
  *   most valuable thing in the repo to unit test, and needs no model to do it.
  *
@@ -39,6 +40,7 @@
 
 import { createModel } from "@/lib/ai/model";
 import { hasAnthropicKey } from "@/lib/config";
+import { WORTH_APPLYING_SCORE } from "@/lib/constants";
 import { fitScoreSchema } from "../state";
 import { MAX_RESEARCH_ATTEMPTS } from "../state";
 import type { SearchResult, SiftStateType } from "../state";
@@ -88,8 +90,8 @@ searched: a topic that was searched and returned nothing is different from one
 never searched, and only the latter belongs in researchGaps.
 
 Scoring:
-- score is 0-10 for how well the candidate fits THIS posting. 7+ means worth
-  applying to.
+- score is 0-10 for how well the candidate fits THIS posting. ${WORTH_APPLYING_SCORE}+ means
+  worth applying to.
 - confidence reflects how much the evidence supports your score. Use "low" when
   the research did not tell you what you needed about the role or company.
 - researchGaps names what you still need to know. Each entry should be
@@ -179,7 +181,9 @@ export async function scoreFit(
       content: [
         `JOB POSTING:\n${state.jobText ?? "(missing)"}`,
         `CANDIDATE:\n${state.resumeSummary}`,
-        `RESEARCH — ${state.attempts} pass(es), angles searched: ${anglesTried.join(" | ") || "none"}\n${formatEvidence(evidence)}`,
+        state.company
+          ? `RESEARCH on ${state.company} — ${state.attempts} pass(es), angles searched: ${anglesTried.join(" | ") || "none"}\n${formatEvidence(evidence)}`
+          : "RESEARCH: none. The posting does not name its employer, so there was no company to research. Judge the role on the posting alone, and do not list company research in researchGaps.",
       ].join("\n\n---\n\n"),
     },
   ]);
@@ -232,12 +236,18 @@ export function routeAfterScore(
   // 1. Cap wins over everything.
   if (state.attempts >= MAX_RESEARCH_ATTEMPTS) return "draft_letter";
 
-  // 2. No score yet — shouldn't happen, since score_fit runs first. Research
+  // 2. No named employer, so research has nothing to find. Without this, low
+  //    confidence would loop back to a research node that returns nothing,
+  //    and score_fit would run again on identical input — up to the cap, at
+  //    ~11s and real tokens each time.
+  if (state.company === null) return "draft_letter";
+
+  // 3. No score yet — shouldn't happen, since score_fit runs first. Research
   //    rather than draft a letter from nothing; rule 1 bounds the retries.
   const { fitScore } = state;
   if (!fitScore) return "research";
 
-  // 3. Uncertain, or the model said what it still needs -> another angle.
+  // 4. Uncertain, or the model said what it still needs -> another angle.
   if (fitScore.confidence === "low" || fitScore.researchGaps.length > 0) {
     return "research";
   }

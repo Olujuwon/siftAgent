@@ -44,7 +44,7 @@
  */
 
 import "server-only";
-import { StateGraph, START, END } from "@langchain/langgraph";
+import { StateGraph, START, END, MemorySaver, isGraphInterrupt } from "@langchain/langgraph";
 import { SiftState } from "./state";
 import {research} from "@/lib/agent/nodes/research";
 import {intake} from "@/lib/agent/nodes/intake";
@@ -81,11 +81,34 @@ function withTiming(name: string, node: Node): Node {
         timings: [{ node: name, durationMs: Date.now() - startedAt }],
       };
     } catch (error) {
-      console.error(`[graph:${name}] failed after ${Date.now() - startedAt}ms`, error);
+      // interrupt() pauses a node by THROWING a GraphInterrupt. That's control
+      // flow, not failure — rethrow without logging it as one, or every paused
+      // draft_letter shows up in the logs as an error.
+      if (!isGraphInterrupt(error)) {
+        console.error(`[graph:${name}] failed after ${Date.now() - startedAt}ms`, error);
+      }
       throw error;
     }
   };
 }
+
+/**
+ * Holds paused runs so the letter route can resume them.
+ *
+ * On globalThis, not a plain module-level const. Next can load the same module
+ * more than once — once per route bundle, and again on every hot reload — and
+ * each copy would get its own empty MemorySaver. The triage route would pause a
+ * run in one, the letter route would look in another, and find nothing.
+ * globalThis is per-process, so every copy shares one.
+ *
+ * In-memory, so paused runs are lost on restart and not shared between server
+ * instances. Fine locally; on serverless a resume can land on a different
+ * instance. The letter route reports that as expired rather than failing oddly.
+ */
+const globalForGraph = globalThis as typeof globalThis & {
+  __siftCheckpointer?: MemorySaver;
+};
+const checkpointer = (globalForGraph.__siftCheckpointer ??= new MemorySaver());
 
 export function buildGraph() {
   return new StateGraph(SiftState)
@@ -104,5 +127,8 @@ export function buildGraph() {
         draft_letter: "draft_letter",
       })
       .addEdge("draft_letter", END)
-      .compile();
+      .compile({ checkpointer });
 }
+
+/** One compiled graph per process, shared by the triage and letter routes. */
+export const graph = buildGraph();

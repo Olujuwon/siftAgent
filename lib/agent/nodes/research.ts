@@ -33,12 +33,17 @@ import {search} from "@/lib/agent/tools/search";
 export const RESEARCH_ANGLES = ["<company> tech stack engineering", "<company> funding recent news",
   "<company> glassdoor culture interview", "<company> what they build products customers"];
 
-const companyName = "Songtradr";   // TODO: extract properly
-
 export async function research(
   state: SiftStateType,
 ): Promise<Partial<SiftStateType>> {
-  const searchQuery = RESEARCH_ANGLES[state.attempts].replace("<company>", companyName);
+  // No named employer: there is no company to research, so don't search for
+  // one. Still count the pass, so the attempts cap stays accurate.
+  // routeAfterScore also checks company and won't loop back here for nothing.
+  if (!state.company) {
+    return { searchResults: [], attempts: state.attempts + 1 };
+  }
+
+  const searchQuery = RESEARCH_ANGLES[state.attempts].replace("<company>", state.company);
   const results = await search(searchQuery);
   return { searchResults: results.map(r =>
         ({...r, attempt: state.attempts})), attempts: state.attempts + 1 }

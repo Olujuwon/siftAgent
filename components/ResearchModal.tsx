@@ -18,6 +18,8 @@ import { Modal } from "@/components/Modal";
 import type { NodeTiming, SearchResult } from "@/lib/types";
 
 type ResearchModalProps = {
+  /** Shown so a wrong identification is catchable before you trust the score. */
+  company?: string | null;
   searchResults?: SearchResult[];
   timings?: NodeTiming[];
   durationMs?: number;
@@ -32,6 +34,7 @@ export function ResearchModal({
   // Defaulted because this is a wire boundary: an older cached response, or a
   // partial one, can arrive without these. A missing field should not take the
   // whole result view down.
+  company,
   searchResults = [],
   timings = [],
   durationMs = 0,
@@ -66,6 +69,21 @@ export function ResearchModal({
 
       <Modal open={isOpen} onClose={() => setIsOpen(false)} title="Research and timing">
         <div className="flex flex-col gap-5 text-sm">
+          <p className="rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-900">
+            {company ? (
+              <>
+                Researched <span className="font-medium">{company}</span>. If
+                that&rsquo;s the wrong company, the score is built on the wrong
+                evidence.
+              </>
+            ) : (
+              <>
+                The posting doesn&rsquo;t name its employer, so no company
+                research ran. The score is based on the posting alone.
+              </>
+            )}
+          </p>
+
           <div>
             <h3 className="mb-2 font-medium">Where the time went</h3>
             <table className="w-full text-xs">

@@ -65,6 +65,10 @@ void _searchResultInSync;
 export const SiftState = new StateSchema({
   jobInput: jobInputSchema,
   jobText: z.string().optional(),
+  // Set by intake. null means the posting doesn't name its employer — a
+  // legitimate answer, common for recruiter listings. Undefined means intake
+  // hasn't run yet.
+  company: z.string().nullable().optional(),
   resumeSummary: z.string(),
   attempts: z.number().default(() => 0), // nodes return state.attempts + 1, never 1
   searchResults: new ReducedValue(

@@ -87,15 +87,39 @@ export type NodeTiming = {
 /** Success response from `POST /api/triage`. */
 export type TriageResponse = {
   fitScore: FitScore;
-  letterDraft: string;
+  /**
+   * Absent when the score was below WORTH_APPLYING_SCORE: the graph paused
+   * before drafting. letterPending says so, and threadId resumes it.
+   */
+  letterDraft?: string;
+  /** True when the run is paused at draft_letter, waiting to be asked. */
+  letterPending: boolean;
+  /** Identifies this run's saved state, for POST /api/triage/letter. */
+  threadId: string;
   /** How many research loops ran — the only outside view of whether the loop fired. */
   attempts: number;
+  /**
+   * The employer intake identified, or null if the posting doesn't name one.
+   * Shown so a wrong identification is catchable — research on the wrong
+   * company produces a plausible score built on the wrong evidence.
+   */
+  company: string | null;
   /** Everything the research node found, across all passes. */
   searchResults: SearchResult[];
   /** Per-node durations, in the order they ran. */
   timings: NodeTiming[];
   /** Wall-clock for the whole graph invocation, measured in the route. */
   durationMs: number;
+};
+
+/** Request body for `POST /api/triage/letter`: resume a paused run. */
+export type LetterRequest = {
+  threadId: string;
+};
+
+/** Success response from `POST /api/triage/letter`. */
+export type LetterResponse = {
+  letterDraft: string;
 };
 
 /** Keep the message generic; never forward provider errors verbatim. */
