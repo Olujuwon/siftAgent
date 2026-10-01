@@ -11,11 +11,23 @@
  * one level deeper instead.
  */
 
+import { connection } from "next/server";
+
 import { DemoBanner } from "@/components/DemoBanner";
 import { TriagePanel } from "@/components/TriagePanel";
 import { hasAnthropicKey, hasTavilyKey } from "@/lib/config";
 
-export default function Page() {
+export default async function Page() {
+  // Render per request, not at build time.
+  //
+  // This page reads the key flags but uses no request-time API, so Next would
+  // prerender it during `next build` — freezing whichever answer the BUILD
+  // environment gave. The build has no keys, so the deployed site would show
+  // the demo banner forever, even once the keys are set.
+  //
+  // connection() stops prerendering here; everything below runs per request.
+  await connection();
+
   return (
     // h-full fills the body shell. min-h-0 is the critical one: without it a
     // flex child refuses to shrink below its content, so inner panes can never
