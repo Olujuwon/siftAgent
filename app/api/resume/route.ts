@@ -26,12 +26,15 @@
  * - Never forward provider errors verbatim — they carry request IDs, URLs, and
  *   sometimes key fragments. Log the real one, return a generic one.
  * - No auth in Phase 1: this endpoint costs a model call and writes to disk.
- *   Fine on localhost, a reason not to deploy publicly as-is.
+ *   Fine on localhost, a reason not to deploy publicly with keys set.
+ * - Every call is scoped to a session cookie, so visitors don't share a CV.
+ *   That is separation, not authentication — see lib/resume/session.ts.
  */
 
 import { NextResponse } from "next/server";
 
 import { MAX_PDF_BYTES, PdfParseError, parsePdf } from "@/lib/resume/parsePdf";
+import { ensureSessionId } from "@/lib/resume/session";
 import { summarizeResume } from "@/lib/resume/summarize";
 import {
   clearResumeSummary,
@@ -143,13 +146,17 @@ export async function POST(request: Request) {
   const extracted = await extractResume(request);
   if (extracted instanceof Response) return extracted;
 
+  // Before the model call: a visitor with no cookie yet gets one here, and the
+  // summary is stored against it.
+  const sessionId = await ensureSessionId();
+
   try {
     const stored = {
       summary: await summarizeResume(extracted.text),
       updatedAt: new Date().toISOString(),
       sourceFilename: extracted.sourceFilename,
     };
-    await writeResumeSummary(stored);
+    await writeResumeSummary(sessionId, stored);
 
     // Returned so the UI can show it. This is the only point at which a bad
     // summary is catchable — unseen, it skews every later triage.
@@ -170,8 +177,12 @@ export async function POST(request: Request) {
  * hasResume: false, not a 404. The UI needs to tell that apart from a failure.
  */
 export async function GET() {
+  // ensure, not get: the UI calls GET on mount, so this is where a first-time
+  // visitor picks up a session before they upload anything.
+  const sessionId = await ensureSessionId();
+
   try {
-    const stored = await readResumeSummary();
+    const stored = await readResumeSummary(sessionId);
     return NextResponse.json<ResumeStatusResponse>(
       stored ? { hasResume: true, ...stored } : { hasResume: false },
     );
@@ -195,8 +206,10 @@ export async function GET() {
  * state straight from the response instead of refetching.
  */
 export async function DELETE() {
+  const sessionId = await ensureSessionId();
+
   try {
-    await clearResumeSummary();
+    await clearResumeSummary(sessionId);
     return NextResponse.json<ResumeStatusResponse>({ hasResume: false });
   } catch (error) {
     console.error("[resume:DELETE]", error);

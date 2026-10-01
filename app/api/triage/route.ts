@@ -29,6 +29,7 @@ import { NextResponse } from "next/server";
 import { graph } from "@/lib/agent/graph";
 import type { JobInput } from "@/lib/agent/state";
 import { ExtractError } from "@/lib/agent/tools/search";
+import { getSessionId } from "@/lib/resume/session";
 import { readResumeSummary } from "@/lib/resume/store";
 import type { TriageErrorResponse, TriageRequest, TriageResponse } from "@/lib/types";
 
@@ -74,9 +75,13 @@ export async function POST(request: Request) {
 
   // Read the stored resume BEFORE invoking. Scoring a posting against nothing
   // produces a confident, meaningless answer and still costs model calls.
+  // get, not ensure: a triage without a session has no CV to score against,
+  // which the check below already reports. A new cookie here would be pointless.
+  const sessionId = await getSessionId();
+
   let stored;
   try {
-    stored = await readResumeSummary();
+    stored = sessionId ? await readResumeSummary(sessionId) : null;
   } catch (error) {
     console.error("[triage:resume]", error);
     return NextResponse.json<TriageErrorResponse>(

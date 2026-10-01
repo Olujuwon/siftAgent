@@ -19,6 +19,13 @@
  * service, survives a restart. Phase 2's SQLite replaces it — keep this
  * interface at three functions so the swap stays contained.
  *
+ * ONE ENTRY PER VISITOR
+ * Every function takes a sessionId (see ./session). The file holds a map keyed
+ * by it, and so does the in-memory fallback. Before this, a single value was
+ * shared by the whole process: on a deployment, one visitor's CV was visible
+ * to the next, and their Remove deleted it. Visitors are separated; nothing
+ * here authenticates them.
+ *
  * PII
  * - This file holds real resume-derived data. Gitignored. Never commit it,
  *   never rename it outside the ignore pattern, never log its contents.
@@ -44,6 +51,9 @@ import { isDemoMode } from "@/lib/config";
 import path from "node:path";
 
 export const RESUME_SUMMARY_PATH = ".resume-summary.local.json";
+
+/** The file's shape: one entry per session id. */
+type SummaryFile = Record<string, StoredResumeSummary>;
 
 export type StoredResumeSummary = {
   summary: string;
@@ -77,14 +87,15 @@ function isMissingFileError(error: unknown): boolean {
 }
 
 /**
- * Set when the filesystem refuses writes — serverless hosts mount the app
- * read-only, and /tmp is per-instance and ephemeral anyway. Holding the summary
+ * Used when the filesystem refuses writes — serverless hosts mount the app
+ * read-only, and /tmp is per-instance and ephemeral anyway. Holding summaries
  * here keeps uploads working for the life of the process, which covers a
  * visitor's session on the demo deployment. Lost on restart, by design.
  *
- * Phase 2's database is the real answer; this is deliberate demo degradation.
+ * Keyed by session, like the file. Phase 2's database is the real answer; this
+ * is deliberate demo degradation.
  */
-let inMemorySummary: StoredResumeSummary | null = null;
+const inMemorySummaries = new Map<string, StoredResumeSummary>();
 
 /** Read-only mount (serverless) or a permissions problem. */
 function isReadOnlyError(error: unknown): boolean {
@@ -118,9 +129,25 @@ function emptyResult(): StoredResumeSummary | null {
   return isDemoMode ? DEMO_RESUME : null;
 }
 
-export async function readResumeSummary(): Promise<StoredResumeSummary | null> {
-  if (inMemorySummary) return inMemorySummary;
+/** True for a file written before summaries were keyed by session. */
+function isLegacyShape(parsed: unknown): parsed is StoredResumeSummary {
+  return (
+    typeof parsed === "object" &&
+    parsed !== null &&
+    typeof (parsed as StoredResumeSummary).summary === "string"
+  );
+}
 
+/**
+ * The whole file, or null when there isn't one.
+ *
+ * A pre-session file is CLAIMED by whoever reads next: its single entry is
+ * rewritten under that session id. That only ever happens on a developer's own
+ * machine — a fresh container has no file, and .dockerignore keeps it out of
+ * the image — so it costs one person one claim rather than everyone a
+ * re-upload, and it cannot hand a deployed visitor someone else's CV.
+ */
+async function readFileEntries(sessionId: string): Promise<SummaryFile | null> {
   let raw: string;
 
   try {
@@ -128,15 +155,16 @@ export async function readResumeSummary(): Promise<StoredResumeSummary | null> {
     raw = await readFile(summaryPath(), "utf8");
   } catch (error) {
     // No file yet is the normal first-run state, not a failure.
-    if (isMissingFileError(error)) return emptyResult();
+    if (isMissingFileError(error)) return null;
     // A read-only mount can also surface as EACCES/EPERM — same meaning here.
-    if (isReadOnlyError(error)) return emptyResult();
+    if (isReadOnlyError(error)) return null;
     // Anything else — a directory in the way, say — is real. Let it out.
     throw error;
   }
 
+  let parsed: unknown;
   try {
-    return JSON.parse(raw) as StoredResumeSummary;
+    parsed = JSON.parse(raw);
   } catch {
     // Deliberately NOT null. Returning null here would send the user off to
     // re-upload when the actual problem is a corrupt file on disk.
@@ -144,6 +172,24 @@ export async function readResumeSummary(): Promise<StoredResumeSummary | null> {
       `${RESUME_SUMMARY_PATH} exists but is not valid JSON. Delete it and re-upload.`,
     );
   }
+
+  if (isLegacyShape(parsed)) {
+    const claimed: SummaryFile = { [sessionId]: parsed };
+    await writeFileEntries(claimed);
+    return claimed;
+  }
+
+  return parsed as SummaryFile;
+}
+
+export async function readResumeSummary(
+  sessionId: string,
+): Promise<StoredResumeSummary | null> {
+  const inMemory = inMemorySummaries.get(sessionId);
+  if (inMemory) return inMemory;
+
+  const entries = await readFileEntries(sessionId);
+  return entries?.[sessionId] ?? emptyResult();
 }
 
 /**
@@ -153,34 +199,54 @@ export async function readResumeSummary(): Promise<StoredResumeSummary | null> {
  *
  * No ENOENT handling here: writeFile creates the file if it's absent.
  */
-export async function writeResumeSummary(
-  value: StoredResumeSummary,
-): Promise<void> {
+async function writeFileEntries(entries: SummaryFile): Promise<void> {
   const target = summaryPath();
   const temp = `${target}.tmp`;
 
+  await writeFile(temp, JSON.stringify(entries, null, 2), "utf8");
   try {
-    await writeFile(temp, JSON.stringify(value, null, 2), "utf8");
-    try {
-      await rename(temp, target);
-    } catch (error) {
-      // Don't leave the temp file behind if the rename failed.
-      await unlink(temp).catch(() => {});
-      throw error;
-    }
-    inMemorySummary = null; // the file is now authoritative
+    await rename(temp, target);
   } catch (error) {
-    if (!isReadOnlyError(error)) throw error;
-    // Read-only filesystem: keep it in memory so the upload still works.
-    inMemorySummary = value;
+    // Don't leave the temp file behind if the rename failed.
+    await unlink(temp).catch(() => {});
+    throw error;
   }
 }
 
-/** Deleting a file that isn't there is a success, not a failure. */
-export async function clearResumeSummary(): Promise<void> {
-  inMemorySummary = null;
+export async function writeResumeSummary(
+  sessionId: string,
+  value: StoredResumeSummary,
+): Promise<void> {
   try {
-    await unlink(summaryPath());
+    // Read-modify-write: other sessions' entries live in the same file and
+    // must survive this write.
+    const entries = (await readFileEntries(sessionId)) ?? {};
+    await writeFileEntries({ ...entries, [sessionId]: value });
+    inMemorySummaries.delete(sessionId); // the file is now authoritative
+  } catch (error) {
+    if (!isReadOnlyError(error)) throw error;
+    // Read-only filesystem: keep it in memory so the upload still works.
+    inMemorySummaries.set(sessionId, value);
+  }
+}
+
+/**
+ * Removes only this session's entry. Deleting the whole file would delete
+ * everyone else's, which is the bug this module was changed to prevent.
+ *
+ * Clearing what isn't there is a success, not a failure.
+ */
+export async function clearResumeSummary(sessionId: string): Promise<void> {
+  inMemorySummaries.delete(sessionId);
+
+  try {
+    const entries = await readFileEntries(sessionId);
+    if (!entries || !(sessionId in entries)) return;
+
+    delete entries[sessionId];
+    // The file is kept even when empty: an empty object reads back as "nothing
+    // stored" anyway, and unlinking would race with another session's write.
+    await writeFileEntries(entries);
   } catch (error) {
     if (isMissingFileError(error) || isReadOnlyError(error)) return;
     throw error;
